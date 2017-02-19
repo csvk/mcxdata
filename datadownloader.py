@@ -24,7 +24,9 @@ datepick.click()
 #xpath = "//div[@class='datepick-month']//div[@class='datepick-ctrl]//a[@title='Clear all the dates'][text()='Clear']"
 #xpath = "//div[@class='datepick-ctrl']/a[@title='Clear all the dates'][text()='Clear']"
 #xpath = "//div[@class='datepick-ctrl']/a[@class='datepick-cmd datepick-cmd-clear ']"
-xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Friday, Feb 3, 2017'][text()='3']"
+#xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Wednesday, Feb 1, 2017'][text()='1']"
+xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Wednesday, Feb 1, 2017']"
+# xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Tuesday, Jan 31, 2017']"
 date = browser.find_element_by_xpath(xpath)
 print('###2', date)
 time.sleep(1)
@@ -34,7 +36,7 @@ download = browser.find_element_by_id('cph_InnerContainerRight_C001_lnkExpToCSV'
 print('###3', download)
 download.click()
 
-time.sleep(1)
+time.sleep(5)
 browser.quit()
 
 #driver.find_element_by_xpath("//div[@id='ui-datepicker-div']//a[@class='ui-state-default'][text()='HERE_IS_DATE_LIKE_10']")).click()
