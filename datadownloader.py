@@ -6,13 +6,17 @@ Created on Feb 19, 2017
 
 """
 
+import selenium
 from selenium import webdriver
 import time
 
 url = 'https://www.mcxindia.com/market-data/bhavcopy'
 chromedriver = 'C:/Users/Souvik/Downloads/chromedriver_win32/chromedriver.exe'
 
-browser = webdriver.Chrome(chromedriver)
+options = webdriver.ChromeOptions()
+options.add_argument("--start-maximized")
+
+browser = webdriver.Chrome(chromedriver, chrome_options=options)
 
 browser.get(url)
 
@@ -20,23 +24,75 @@ datepick = browser.find_element_by_id('txtDate')
 print('###1', datepick)
 datepick.click()
 
+
+
+
 #date = browser.find_element_by_class_name('datepick-cmd datepick-cmd-prev')
 #xpath = "//div[@class='datepick-month']//div[@class='datepick-ctrl]//a[@title='Clear all the dates'][text()='Clear']"
 #xpath = "//div[@class='datepick-ctrl']/a[@title='Clear all the dates'][text()='Clear']"
 #xpath = "//div[@class='datepick-ctrl']/a[@class='datepick-cmd datepick-cmd-clear ']"
 #xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Wednesday, Feb 1, 2017'][text()='1']"
-xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Wednesday, Feb 1, 2017']"
-# xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Tuesday, Jan 31, 2017']"
-date = browser.find_element_by_xpath(xpath)
-print('###2', date)
-time.sleep(1)
-date.click()
-print('############')
-download = browser.find_element_by_id('cph_InnerContainerRight_C001_lnkExpToCSV')
-print('###3', download)
-download.click()
+#xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='Select Wednesday, Feb 1, 2017']"
+dateText2 = 'Select Tuesday, Jan 31, 2017'
+dateText = 'Select Thursday, Feb 16, 2017'
+xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='{}']".format(dateText)
 
-time.sleep(5)
+date = None
+try:
+    date = browser.find_element_by_xpath(xpath)
+except selenium.common.exceptions.NoSuchElementException:
+    print('Date not found:', dateText)
+
+print('###2', date)
+show = browser.find_element_by_id('btnShowDatewise')
+
+time.sleep(1)
+
+#prev_month.click()
+if date is not None:
+    date.click()
+    show.click()
+
+
+
+print('###3')
+download = browser.find_element_by_id('cph_InnerContainerRight_C001_lnkExpToCSV')
+#except:
+# print('a')
+print('###4', download)
+download.click()
+time.sleep(2)
+
+print('###4')
+
+datepick.click()
+xpath = "//div[@class='datepick-nav']/a[@title='Show the previous month']"
+prev_month = browser.find_element_by_xpath(xpath)
+
+
+print('###5')
+date = None
+
+prev_month.click()
+time.sleep(1)
+print('###6')
+xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='{}']".format(dateText2)
+try:
+    date = browser.find_element_by_xpath(xpath)
+except selenium.common.exceptions.NoSuchElementException:
+    print('Date not found:', dateText2)
+print('###7')
+time.sleep(1)
+
+
+if date is not None:
+    date.click()
+    show.click()
+
+print('###8')
+download.click()
+time.sleep(2)
+print('###9')
 browser.quit()
 
 #driver.find_element_by_xpath("//div[@id='ui-datepicker-div']//a[@class='ui-state-default'][text()='HERE_IS_DATE_LIKE_10']")).click()
@@ -46,6 +102,8 @@ browser.quit()
 #"//div[@class='datepick-month'[text()='13']"
 
 #<a href="javascript:void(0)" title="Clear all the dates" class="datepick-cmd datepick-cmd-clear ">Clear</a>
+
+#<a href="javascript:void(0)" title="Show the previous month" class="datepick-cmd datepick-cmd-prev ">&lt;Prev</a>
 
 
 
