@@ -8,10 +8,12 @@ Created on Feb 19, 2017
 
 import selenium
 from selenium import webdriver
+from selenium.webdriver.support.ui import Select
 import time
+import pandas
 
 url = 'https://www.mcxindia.com/market-data/bhavcopy'
-chromedriver = 'C:/Users/Souvik/Downloads/chromedriver_win32/chromedriver.exe'
+chromedriver = 'C:\Program Files (x86)/chromedriver_win32/chromedriver.exe'
 
 options = webdriver.ChromeOptions()
 options.add_argument("--start-maximized")
@@ -69,11 +71,26 @@ datepick.click()
 xpath = "//div[@class='datepick-nav']/a[@title='Show the previous month']"
 prev_month = browser.find_element_by_xpath(xpath)
 
+select_year_xpath = "//div[@class='datepick-month-header']/select[@title='Change the year']"
+select_month_xpath = "//div[@class='datepick-month-header']/select[@title='Change the month']"
+
+select_year = Select(browser.find_element_by_xpath(select_year_xpath))
+select_month = Select(browser.find_element_by_xpath(select_month_xpath))
+
+select_year.select_by_visible_text('2016')
+select_month.select_by_visible_text('August')
+
+time.sleep(5)
+
 
 print('###5')
 date = None
 
-prev_month.click()
+#prev_month.click()
+#prev_month = browser.find_element_by_xpath(xpath)
+#prev_month.click()
+#prev_month = browser.find_element_by_xpath(xpath)
+#prev_month.click()
 time.sleep(1)
 print('###6')
 xpath = "//div[@class='datepick-month']/table/tbody/tr/td/a[@title='{}']".format(dateText2)

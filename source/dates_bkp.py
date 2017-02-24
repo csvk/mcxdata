@@ -6,7 +6,7 @@ Created on Feb 21, 2017
 
 """
 
-date_clicks = {
+dates = {
     'Select Sunday, Feb 19, 2017': 0,
     'Select Saturday, Feb 18, 2017': 0,
     'Select Friday, Feb 17, 2017': 0,
