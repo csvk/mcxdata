@@ -12,6 +12,7 @@ from selenium.webdriver.support.ui import Select
 import time
 import pandas
 
+
 url = 'https://www.mcxindia.com/market-data/bhavcopy'
 chromedriver = 'C:\Program Files (x86)/chromedriver_win32/chromedriver.exe'
 
