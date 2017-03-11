@@ -26,7 +26,7 @@ os.chdir(location)
 log_lines = []
 
 #date_range = dates.dates('2017-02-17', '2017-02-20')
-date_range = dates.dates('2016-11-01')
+date_range = dates.dates('2017-02-25')
 
 options = webdriver.ChromeOptions()
 options.add_argument("--start-maximized")
