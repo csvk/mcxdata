@@ -15,7 +15,7 @@ import traceback, logging
 
 
 
-location = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data' # Laptop
+location = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data delta' # Laptop
 # location = 'C:/Users/SVK/OneDrive/Python/mcxdata/data' # Desktop
 
 url = 'https://www.mcxindia.com/market-data/bhavcopy'
@@ -26,7 +26,8 @@ os.chdir(location)
 log_lines = []
 
 #date_range = dates.dates('2017-02-17', '2017-02-20')
-date_range = dates.dates('2017-02-25')
+#date_range = dates.dates('2017-02-25')
+date_range = dates.adhoc_dates
 
 options = webdriver.ChromeOptions()
 options.add_argument("--start-maximized")
@@ -77,14 +78,17 @@ try:
             log_lines.append('\n{}'.format(log_line))
             print(log_line)
 except Exception as e:
-    f_log = open(logfile, 'a')
-    f_log.writelines(log_lines)
-    f_log.close()
+    #f_log = open(logfile, 'wb')
+    #f_log.writelines(log_lines)
+    #f_log.close()
     print('Program error, writing download log')
     logging.error(traceback.format_exc())
 
 
-
+#if not os.path.isfile(logfile):
+f_log = open(logfile, 'a')
+f_log.writelines(log_lines)
+f_log.close()
 
 print('Download complete')
 

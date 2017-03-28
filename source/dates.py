@@ -10,7 +10,7 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import calendar
 
-adhoc_dates = [] # Can be initiated with dates in YYYY-MM-DD format
+#adhoc_dates = [] # Can be initiated with dates in YYYY-MM-DD format
 yesterday = (date.today() - relativedelta(days=1)).strftime('%Y-%m-%d')
 all_days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -34,6 +34,12 @@ def dates(start='2008-06-01', end=yesterday, days=all_days):
 def ddmmyy(date):
     return '{}{}{}'.format(date[8:10],date[5:7],date[2:4])
 
+def mm_int(date):
+    """
+    :param date:
+    :return: Month in integer format
+    """
+    return int(date[5:7])
 
 def ddmmyyyy(date):
     return '{}{}{}'.format(date[8:10],date[5:7],date[0:4])
@@ -49,8 +55,11 @@ def yyyy(date):
 def MMM(date):
     return months(date[5:7], 'MMM')
 
+def weekday(date):
+    return datetime.strptime(date, '%Y-%m-%d').weekday()
+
 def dayofweek(date):
-    return calendar.day_name[datetime.strptime(date, '%Y-%m-%d').weekday()]
+    return calendar.day_name[weekday(date)]
 
 def relativedate(date, years=0, months=0, days=0):
     return (datetime.strptime(date, '%Y-%m-%d')
@@ -69,6 +78,9 @@ def setdate(date, year=0, month=0, day=0):
 
     return strpdate.strftime('%Y-%m-%d')
 
+def datediff(date1, date2):
+    return (datetime.strptime(date1, '%Y-%m-%d') - datetime.strptime(date2, '%Y-%m-%d')).days
+
 # Below functions take input as DDMMYY as input date format
 
 def ddmmyy_to_yyyy_mm_dd(date): # Can handle dates years from 1961 to 2060
@@ -84,13 +96,10 @@ def ddMMMyyyy_to_yyyy_mm_dd(date):
 def dd_MMM_yyyy_to_yyyy_mm_dd(date):
     return '{}-{}-{}'.format(date[7:11], mm(date[3:6]), date[0:2])
 
-def ddMMMyyyy_to_yyyy_mm_dd(date):
-    return '{}-{}-{}'.format(date[5:9], mm(date[2:5]), date[0:2])
-
 def ddmmyyyy_to_yyyy_mm_dd(date):
     return '{}-{}-{}'.format(date[4:8], date[2:4], date[0:2])
 
-# Below functions take MOnth name as input: full name of first three chars
+# Below functions take Month name as input: full name of first three chars
 
 def mm(month):
     """Return month in MM format"""
@@ -174,6 +183,14 @@ def months(month, format='x'):
     return return_val
 
 
-
+adhoc_dates = ['2003-11-17', '2003-11-26', '2003-12-25', '2004-01-26', '2004-02-02', '2004-03-02', '2004-04-09',
+               '2004-11-12', '2004-11-15', '2005-01-26', '2005-03-25', '2005-07-28', '2005-08-15', '2005-12-16',
+               '2006-01-26', '2006-04-14', '2006-08-15', '2006-10-02', '2006-12-25', '2007-01-26', '2007-08-15',
+               '2007-10-02', '2007-12-25', '2008-03-21', '2008-08-15', '2008-10-02', '2008-11-27', '2008-12-25',
+               '2009-01-26', '2009-04-10', '2009-04-30', '2009-10-02', '2009-12-25', '2010-01-26', '2010-04-02',
+               '2011-01-26', '2011-04-22', '2011-08-15', '2012-01-26', '2012-04-06', '2012-08-15', '2012-10-02',
+               '2012-12-25', '2013-03-29', '2013-08-15', '2013-10-02', '2013-12-25', '2014-04-18', '2014-04-24',
+               '2014-08-15', '2014-10-02', '2014-10-15', '2014-12-25', '2015-01-26', '2015-04-03', '2015-10-02',
+               '2015-12-25', '2016-01-26', '2016-03-25', '2016-08-15', '2017-01-26']
 
 
