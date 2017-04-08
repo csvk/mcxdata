@@ -11,7 +11,7 @@ import dates, utils
 import pandas as pd
 import pickle as pkl
 
-PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data/' # Laptop
+PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Laptop
 FORMATTED = 'formatted/'
 NODATA = 'nodata/'
 NOTRADES = 'notrades.csv'
@@ -19,7 +19,7 @@ EXPIRIES = 'expiries.txt'
 ROLLOVER_CLOSE = 'rollover_close.txt'
 ROLLOVER_MULT = 'rollover_multipliers.txt'
 CONTINUOUS = 'continuous/'
-VOL_CONTINUOUS = 'continuous_vol_v2/'
+VOL_CONTINUOUS = 'continuous_vol/'
 OI_CONTINUOUS = 'continuous_oi/'
 RATIO_ADJUSTED = 'ratio_adjusted/'
 
@@ -481,6 +481,26 @@ def ratio_adjust():
 
 
 
+def format_date(*kwargs):
+
+    csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
+
+    success, error = 0, 0
+    for file in csv_files:
+        #try:
+        date = file[0:10]
+        df = pd.read_csv(file)
+        for col in kwargs:
+            df[col] = df[col].apply(dates.mm_dd_yyyy_to_yyyy_mm_dd)
+        df.to_csv(file, sep=',', index=False)
+
+        print(date, ',date formatted', file)
+        success += 1
+        # except:
+        print(date, ',Error in formatting', file)
+        error += 1
+
+    print('Contract formatted for {} days, {} errors'.format(success, error))
 
 
 
@@ -500,18 +520,17 @@ def ratio_adjust():
 
 
 
-#path = '{}{}'.format(PATH, 'test/')
 path = PATH
 os.chdir(path)
-#ren_csv_files()
+ren_csv_files()
 os.chdir(FORMATTED)
-#os.chdir('test')
-#print(dates_missing('2003-11-10', '2017-03-03'))
-#format_csv_futures('Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open Interest', 'TDW', 'TDM', 'Expiry Date')
+format_csv_futures('Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open Interest', 'TDW', 'TDM', 'Expiry Date')
 #write_expiry_hist()
 #show_expiry_list(False)
 #continuous_contracts_all([0,1,2,3,4,5,6,7,8,9,10])
-#continuous_contracts_vol_oi_rollover('Volume')
+continuous_contracts_vol_oi_rollover('Volume')
 os.chdir(VOL_CONTINUOUS)
-#os.chdir('test')
 ratio_adjust()
+#os.chdir(RATIO_ADJUSTED)
+#os.chdir('db')
+#format_date('DATE')
