@@ -518,7 +518,7 @@ def format_date(*kwargs):
 
 
 
-
+"""
 
 path = PATH
 os.chdir(path)
@@ -534,3 +534,5 @@ ratio_adjust()
 #os.chdir(RATIO_ADJUSTED)
 #os.chdir('db')
 #format_date('DATE')
+
+"""
