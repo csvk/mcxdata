@@ -170,7 +170,7 @@ def compare_test_1():
         prev_ra_entry = ra_entry
 
 
-def compare_test_2(conn, hist, symbol):
+def compare_test_2(conn, hist, symbol, leeway):
     """
     Compare test results for trade entry on first day of expiry in ratio adjusted continuous data and exit on last day
     of expiry: between ratio adjusted continuous data vs unadjusted data
@@ -216,15 +216,17 @@ def compare_test_2(conn, hist, symbol):
     for i in range(2, len(ra_signals_lst)):
         if ra_signals_lst[i][0] == 'exit' and ua_signals_lst[i][0] == 'exit':
             signals += 1
-            if ra_signals_lst[i][3] == 0 or ua_signals_lst[i][3] == 0:
+            if ra_signals_lst[i - 1][3] == 0 or ua_signals_lst[i - 1][3] == 0:
                 messages.append([symbol, ra_signals_lst[i][2], 'divided by zero error', ra_signals_lst[i][3],
                                  ua_signals_lst[i][3]])
                 zeroerror += 1
             else:
-                ra_growth = round(ra_signals_lst[i][4] / ra_signals_lst[i][3], 4)
-                ua_growth = round(ua_signals_lst[i][4] / ua_signals_lst[i][3], 4)
-                if ra_growth != ua_growth:
-                    messages.append([symbol, ra_signals_lst[i][2], 'signal growth mismatch', ra_growth, ua_growth])
+                ra_growth = round(ra_signals_lst[i][4] / ra_signals_lst[i - 1][3], 4)
+                ua_growth = round(ua_signals_lst[i][4] / ua_signals_lst[i - 1][3], 4)
+                #if ra_growth != ua_growth:
+                if abs(ra_growth - ua_growth) >= leeway:
+                    messages.append([symbol, ra_signals_lst[i][2], 'signal growth mismatch', ra_growth, ua_growth,
+                                     round(abs(ra_growth - ua_growth), 4)])
                     mismatch += 1
                 else:
                     pass
@@ -261,7 +263,7 @@ hist = read_history_all()
 
 messages = []
 for key, data in exp['expiry_dates'].items():
-    messages.append(compare_test_2(conn, hist, str.strip(key)))
+    messages.append(compare_test_2(conn, hist, str.strip(key), 0.001))
 
 
 for message in messages:

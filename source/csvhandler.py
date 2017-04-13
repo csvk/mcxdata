@@ -518,21 +518,3 @@ def format_date(*kwargs):
 
 
 
-"""
-
-path = PATH
-os.chdir(path)
-ren_csv_files()
-os.chdir(FORMATTED)
-format_csv_futures('Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open Interest', 'TDW', 'TDM', 'Expiry Date')
-#write_expiry_hist()
-#show_expiry_list(False)
-#continuous_contracts_all([0,1,2,3,4,5,6,7,8,9,10])
-continuous_contracts_vol_oi_rollover('Volume')
-os.chdir(VOL_CONTINUOUS)
-ratio_adjust()
-#os.chdir(RATIO_ADJUSTED)
-#os.chdir('db')
-#format_date('DATE')
-
-"""
