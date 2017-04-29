@@ -18,10 +18,12 @@ PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Lap
 FORMATTED = 'formatted/'
 ROLLOVER_CLOSE = 'rollover_close.txt'
 ROLLOVER_MULT = 'rollover_multipliers.txt'
-CONTINUOUS = 'continuous/1/'
+CONTINUOUS = 'continuous/'
 VOL_CONTINUOUS = 'continuous_vol/'
 OI_CONTINUOUS = 'continuous_oi/'
 RATIO_ADJUSTED = 'ratio_adjusted/'
+INTERMEDIATE = 'intermediate'
+FINAL = 'final'
 
 EOD_HIST = 'db/DB.db'
 
@@ -40,7 +42,7 @@ def check_volume(df, symbols):
 
 def daily_symbol_check():
     """
-    Test on vol/oi rollover
+    Test symbol selected or not
     :return:
     """
 
@@ -52,34 +54,19 @@ def daily_symbol_check():
 
         date = file[0:10]
         f_file = FORMATTED + file
-        #c_file = FORMATTED + VOL_CONTINUOUS + file
-        #ra_file = FORMATTED + VOL_CONTINUOUS + RATIO_ADJUSTED + file
+
         c_file = FORMATTED + CONTINUOUS + file
         ra_file = FORMATTED + CONTINUOUS + RATIO_ADJUSTED + file
-        #print(date, f_file, c_file, ra_file)
 
         f_df = pd.read_csv(f_file)
         c_df = pd.read_csv(c_file)
         ra_df = pd.read_csv(ra_file)
 
-        #f_df['Symbol'] = f_df['Symbol'].apply(str.strip)
         f_symbols = f_df['Symbol'].unique()
         f_symbols = f_symbols + '-I'
-        #f_vol_symbols = check_volume(f_df, f_df['Symbol'].unique())
-        #f_novol_symbols = list(set(f_symbols) - set(f_vol_symbols))
         c_symbols = c_df['Symbol'].unique()
         ra_symbols = ra_df['Symbol'].unique()
 
-        #print('f', f_symbols)
-        #print('f_vol', f_vol_symbols)
-        #print('f_novol', f_novol_symbols)
-        #print('c', c_symbols)
-        #print('ra', ra_symbols)
-        #print(date, 'f', f_symbols)
-        #print(date, 'c', c_symbols)
-
-
-        #fvset, fnvset, cset, raset =  set(f_vol_symbols), set(f_novol_symbols), set(c_symbols), set(ra_symbols)
         fset, cset, raset = set(f_symbols), set(c_symbols), set(ra_symbols)
         if len(list(fset - cset)) > 0:
             print(date, list(fset - cset), 'symbols not in continuous')
@@ -91,20 +78,7 @@ def daily_symbol_check():
             print(date, list(raset - cset), 'symbols extra in ratio adjusted')
 
 
-
-
-        """
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        print(f_symbols)
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        print(c_symbols)
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        print(ra_symbols)
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        """
-
-
-def daily_signal_check_v():
+def daily_symbol_check_v():
     """
     Test on volume/oi rollover considering no volume
     :return:
@@ -154,19 +128,6 @@ def daily_signal_check_v():
 
 
 
-
-        """
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        print(f_symbols)
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        print(c_symbols)
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        print(ra_symbols)
-        print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-        """
-
-
-
 def daily_expiry_date_check():
     formatted_files = [f for f in os.listdir(FORMATTED) if f.endswith('.csv')]
     formatted_files.sort()
@@ -198,20 +159,12 @@ def daily_signal_check_2():
         date = file[0:10]
         f_file = FORMATTED + file
         c_file = FORMATTED + CONTINUOUS + file
-        #ra_file = FORMATTED + CONTINUOUS + RATIO_ADJUSTED + file
-        #print(date, f_file, c_file, ra_file)
-        #print(date, f_file, c_file)
 
         f_df = pd.read_csv(f_file)
         c_df = pd.read_csv(c_file)
-        #ra_df = pd.read_csv(ra_file)
 
-        #f_df['Symbol'] = f_df['Symbol'].apply(str.strip)
         f_symbols = f_df['Symbol'].unique()
-        #f_vol_symbols = check_volume(f_df, f_df['Symbol'].unique())
-        #f_novol_symbols = list(set(f_symbols) - set(f_vol_symbols))
         c_symbols = c_df['Symbol'].unique()
-        #ra_symbols = ra_df['Symbol'].unique()
 
         f1_symbols = []
         for symbol in f_symbols:
@@ -219,27 +172,53 @@ def daily_signal_check_2():
             f1_symbols.append(symbol + '-I')
             f1_symbols.append(symbol + '-II')
 
-        #print('f', f_symbols)
-        #print('f1', f1_symbols)
-
-        #print('c', c_symbols)
-
-
-
-
-
-        #fvset, fnvset, cset, raset =  set(f_vol_symbols), set(f_novol_symbols), set(c_symbols), set(ra_symbols)
         fset, f1set, cset = set(f_symbols), set(f1_symbols), set(c_symbols)
         if len(list(f1set - cset)) > 1:
             print(date, list(f1set - cset), 'symbols not in continuous')
 
 
+def daily_symbol_check_formatted_continuous_only():
+    """
+    Test symbol selected or not
+    :return:
+    """
 
+    formatted_files = [f for f in os.listdir(FORMATTED) if f.endswith('.csv')]
+    formatted_files.sort()
+
+
+    for file in formatted_files:
+
+        date = file[0:10]
+        f_file = FORMATTED + file
+
+        c_file = FORMATTED + CONTINUOUS + INTERMEDIATE + '-0/' + file
+        #ra_file = FORMATTED + CONTINUOUS + RATIO_ADJUSTED + file
+
+        f_df = pd.read_csv(f_file)
+        c_df = pd.read_csv(c_file)
+        #ra_df = pd.read_csv(ra_file)
+
+        f_symbols = f_df['Symbol'].unique()
+        #f_symbols = f_symbols + '-I'
+        c_symbols = c_df['Symbol'].unique()
+        #ra_symbols = ra_df['Symbol'].unique()
+
+        #fset, cset, raset = set(f_symbols), set(c_symbols), set(ra_symbols)
+        fset, cset = set(f_symbols), set(c_symbols)
+        if len(list(fset - cset)) > 0:
+            print(date, list(fset - cset), 'symbols not in continuous')
+        #if len(list(cset - raset)) > 0:
+        #    print(date, list(cset - raset), 'symbols not in ratio adjusted')
+        if len(list(cset - fset)) > 0:
+            print(date, list(cset - fset), 'symbols extra in continuous')
+        #if len(list(raset - cset)) > 0:
+        #    print(date, list(raset - cset), 'symbols extra in ratio adjusted')
 
 
 os.chdir(PATH)
 #os.chdir('test')
-daily_symbol_check()
+daily_symbol_check_formatted_continuous_only()
 
 
 

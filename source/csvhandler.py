@@ -23,6 +23,8 @@ NONE_SELECTED = 'none_selected.csv.txt'
 FLAT_MULTIPLIER = 'flat_multiplier.csv.txt'
 NXT_SELECTED = 'nxt_selected.csv.txt'
 CONTINUOUS = 'continuous/'
+INTERMEDIATE = 'intermediate'
+FINAL = 'final'
 SELECTED = 'selected/'
 VOL_CONTINUOUS = 'continuous_vol/'
 OI_CONTINUOUS = 'continuous_oi/'
@@ -279,15 +281,12 @@ def continuous_contracts_date_rollover_all(delta=None):
     print('Contract created for {} days, {} errors'.format(success, error))
 
 
-def continuous_contracts_date_rollover(delta=None):
+def continuous_contracts_date_rollover(delta):
     """
     Create continuous contracts file with fixed rollover dates based on delta trading days from expiry
     :param delta: Contract rollover day difference from expiry day
     :return: None, Create continuous contracts file
     """
-
-    if delta is None:
-        delta = 0
 
     if not os.path.isfile(EXPIRIES):
         write_expiry_hist()
@@ -298,7 +297,7 @@ def continuous_contracts_date_rollover(delta=None):
               10: 'X', 11: 'XI',
               12: 'XII', 13: 'XIII', 14: 'XIV', 15: 'XV'}
 
-    utils.mkdir(CONTINUOUS + str(delta))
+    utils.mkdir(CONTINUOUS + INTERMEDIATE + '-' + str(delta))
 
     csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
     csv_files.sort()
@@ -319,13 +318,105 @@ def continuous_contracts_date_rollover(delta=None):
                     rollover_multiplier[symbol] = {}  # Intialize
 
                 prev_exp = None
-                if expiry_hist['expiry_TDMs'][exp[symbol]] - df['TDM'][0] < delta:
+                if expiry_hist['expiry_TDMs'][exp[symbol]] - df['TDM'][0] < delta or exp[symbol] < date:
                     prev_exp = exp[symbol]
                     exp[symbol] = select_expiry_new(csv_files, expiry_hist, date, symbol, delta)
                     if exp[symbol] is None:
                         exp[symbol] = prev_exp
                     if prev_exp == exp[symbol]:
                         prev_exp = None
+
+                sel_record = df.loc[(df['Symbol'] == symbol) & (df['Expiry Date'] == exp[symbol])]
+                if delta > 0:
+                    sel_record['Symbol'] = sel_record['Symbol'] + '-' + romans[delta]
+                if sel_record.empty:
+                    all_records = df.loc[df['Symbol'] == symbol]
+                    if not all_records.empty:
+                        all_records['Current Expiry'] = [exp[symbol] for rec in all_records.iterrows()]
+                        none_selected = pd.concat([none_selected, all_records], axis=0)
+                prev_record = pd.DataFrame()
+                if prev_exp is not None:
+                    prev_record = df.loc[(df['Symbol'] == symbol) & (df['Expiry Date'] == prev_exp)]
+                    if prev_record.empty:
+                        rollover_multiplier[symbol][date] = rollover_multiplier_from_prev_dates(symbol, date, csv_files,
+                                                                                                prev_exp, exp[symbol])
+                        if rollover_multiplier[symbol][date] == 1:
+                            flat_multiplier = pd.concat(
+                                [flat_multiplier, pd.DataFrame({'symbol': [symbol], 'date': [date]})], axis=0)
+
+                if not sel_record.empty and not prev_record.empty:
+                    rollover_multiplier[symbol][date] = prev_record['Close'].iloc[0] / \
+                                                        sel_record['Close'].iloc[0]
+
+                date_pd = pd.concat([date_pd, sel_record], axis=0)
+
+            date_pd.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), file), sep=',', index=False)
+            print(date, ',Continuous contract created', file)
+            success += 1
+
+        except:
+            print(date, ',Error creating Continuous contract', file)
+            error += 1
+
+    none_selected.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), NONE_SELECTED), sep=',', index=False)
+    flat_multiplier.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), FLAT_MULTIPLIER), sep=',', index=False)
+
+    with open(CONTINUOUS + INTERMEDIATE + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
+        pkl.dump(rollover_multiplier, handle)
+
+    print('Contract created for {} days, {} errors'.format(success, error))
+
+    print(rollover_multiplier)
+
+
+def continuous_contracts_date_rollover_debug(delta=0):
+    """
+    Create continuous contracts file with fixed rollover dates based on delta trading days from expiry
+    :param delta: Contract rollover day difference from expiry day
+    :return: None, Create continuous contracts file
+    """
+
+    if not os.path.isfile(EXPIRIES):
+        write_expiry_hist()
+    expiry_hist = read_expiry_hist(EXPIRIES)
+    print(expiry_hist)
+
+    romans = {0: '0', 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX',
+              10: 'X', 11: 'XI',
+              12: 'XII', 13: 'XIII', 14: 'XIV', 15: 'XV'}
+
+    utils.mkdir(CONTINUOUS + INTERMEDIATE + str(delta))
+
+    csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
+    csv_files.sort()
+    print('Initiating continuous contract creation for {} days'.format(len(csv_files)))
+
+    exp = {}
+    rollover_multiplier = {}
+    none_selected, flat_multiplier = pd.DataFrame(), pd.DataFrame()
+    success, error = 0, 0
+    for file in csv_files:
+        try:
+            date = file[0:10]
+            df = pd.read_csv(file)
+            date_pd = pd.DataFrame()
+            #for symbol in ['COPPER']: #df['Symbol'].unique():
+            for symbol in df['Symbol'].unique():
+                if symbol not in exp:
+                    exp[symbol] = '1900-01-01'  # Initialize
+                    rollover_multiplier[symbol] = {}  # Intialize
+
+                prev_exp = None
+                if expiry_hist['expiry_TDMs'][exp[symbol]] - df['TDM'][0] < delta or exp[symbol] < date:
+                    prev_exp = exp[symbol]
+                    exp[symbol] = select_expiry_new(csv_files, expiry_hist, date, symbol, delta)
+                    if exp[symbol] is None:
+                        exp[symbol] = prev_exp
+                    if prev_exp == exp[symbol]:
+                        prev_exp = None
+
+                if symbol == 'COPPER':
+                    print('### 1', date, exp[symbol])
 
                 sel_record = df.loc[(df['Symbol'] == symbol) & (df['Expiry Date'] == exp[symbol])]
                 sel_record['Symbol'] = sel_record['Symbol'] + '-' + romans[delta]
@@ -350,7 +441,7 @@ def continuous_contracts_date_rollover(delta=None):
 
                 date_pd = pd.concat([date_pd, sel_record], axis=0)
 
-            date_pd.to_csv('{}{}'.format(CONTINUOUS + str(delta) + '/', file), sep=',', index=False)
+            date_pd.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), file), sep=',', index=False)
             print(date, ',Continuous contract created', file)
             success += 1
 
@@ -358,15 +449,94 @@ def continuous_contracts_date_rollover(delta=None):
             print(date, ',Error creating Continuous contract', file)
             error += 1
 
-    none_selected.to_csv('{}{}'.format(CONTINUOUS + str(delta) + '/', NONE_SELECTED), sep=',', index=False)
-    flat_multiplier.to_csv('{}{}'.format(CONTINUOUS + str(delta) + '/', FLAT_MULTIPLIER), sep=',', index=False)
+    none_selected.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), NONE_SELECTED), sep=',', index=False)
+    flat_multiplier.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), FLAT_MULTIPLIER), sep=',', index=False)
 
-    with open(CONTINUOUS + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
+    with open(CONTINUOUS + INTERMEDIATE + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
         pkl.dump(rollover_multiplier, handle)
 
     print('Contract created for {} days, {} errors'.format(success, error))
 
     print(rollover_multiplier)
+
+
+def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
+    """
+    Create continuous contracts file on vol rollover (no cur bar) on top of date rollover
+    :return: None, Create continuous contracts file
+    """
+
+    #if not os.path.isfile(EXPIRIES):
+    #    write_expiry_hist()
+
+    expiry_hist = read_expiry_hist(EXPIRIES)
+    e_dates = expiry_hist['expiry_dates']
+    print(e_dates)
+
+    romans = {0: '0', 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX',
+              10: 'X', 11: 'XI',
+              12: 'XII', 13: 'XIII', 14: 'XIV', 15: 'XV'}
+
+    #utils.mkdir(CONTINUOUS + FINAL + '-' + str(delta))
+
+    csv_files = [f for f in os.listdir(CONTINUOUS + INTERMEDIATE + '-' + str(delta)) if f.endswith('.csv')]
+    csv_files.sort()
+    print('Initiating final continuous contract creation for {} days'.format(len(csv_files)))
+
+    utils.mkdir(CONTINUOUS + FINAL + '-' + str(delta))
+    #utils.copy_files(CONTINUOUS + INTERMEDIATE + '-' + str(delta), CONTINUOUS + FINAL + '-' + str(delta), csv_files)
+
+    none_selected = pd.read_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), NONE_SELECTED))
+
+    for symbol in none_selected['Symbol'].unique(): #['PEPPER']:#none_selected['Symbol'].unique():
+        #print('$$$', symbol)
+        ns_records = none_selected.loc[none_selected['Symbol'] == symbol]
+        #print(ns_records)
+
+        for curr_exp in ns_records['Current Expiry'].unique():
+            curr_exp_index = e_dates[symbol].index(curr_exp)
+            #print(symbol, curr_exp, curr_exp_index, len((e_dates[symbol])))
+            #nxt_expiry, ns_records_with_nxt_exp, ns_dates_with_nxt_exp, check_csv_files = None, None, None, None
+            if curr_exp_index < len(e_dates[symbol]) - 1:
+                nxt_expiry = e_dates[symbol][e_dates[symbol].index(curr_exp) + 1]
+                ns_records_with_nxt_exp = ns_records.loc[(ns_records['Expiry Date'] == nxt_expiry) &
+                                                         (ns_records['Current Expiry'] == curr_exp)]
+                ns_dates_with_nxt_exp = [d for d in ns_records_with_nxt_exp['Date']]
+                if len(ns_dates_with_nxt_exp) > 0:
+                    print(symbol, curr_exp, nxt_expiry, min(ns_dates_with_nxt_exp), max(ns_dates_with_nxt_exp))
+                    check_csv_files = [d for d in csv_files if
+                                       d[0:10] >= min(ns_dates_with_nxt_exp) and d[0:10] <= max(ns_dates_with_nxt_exp)
+                                       and d[0:10] <= nxt_expiry]
+                    if curr_exp_index >= 1:
+                        prev_expiry = e_dates[symbol][e_dates[symbol].index(curr_exp) - 1]
+                        check_csv_files = [d for d in check_csv_files if d[0:10] >= prev_expiry]
+
+                    #check_csv_files = [d for d in csv_files if
+                    #                   d[0:10] >= min(ns_dates_with_nxt_exp) and d[0:10] <= max(ns_dates_with_nxt_exp)
+                    #                   and d[0:10] < nxt_expiry]
+                    #if curr_exp_index >= 1:
+                    #    check_csv_files = [d for d in check_csv_files if d[0:10] >= prev_expiry]
+                    #print(ns_dates_with_nxt_exp, check_csv_files)
+                    continuous_con_found_dates = []
+                    csv_dfs, i = [], 0
+                    for file in check_csv_files:
+                        #print(symbol, file)
+                        csv_dfs.append(pd.read_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), file)))
+                        sel_record = csv_dfs[i].loc[csv_dfs[i]['Symbol'] == symbol]
+                        if not sel_record.empty:
+                            #print('###', symbol)
+                            continuous_con_found_dates.append(file[0:10])
+                        i += 1
+                    #print(symbol, nxt_exp_ns_dates, continuous_con_found_dates)
+
+
+                #for date in nxt_exp_ns_records['Date']:
+                    #print('$$$', symbol, date, curr_exp, nxt_expiry)
+                #print(nxt_expiry)
+                #print(nxt_exp_ns_records)
+            #else:
+            #    print('###', symbol, curr_exp, curr_exp_index, len((e_dates[symbol])))
+
 
 
 def continuous_contracts_select_days(delta):
