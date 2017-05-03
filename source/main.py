@@ -23,8 +23,8 @@ tracker = SummaryTracker()
 path = PATH
 os.chdir(path)
 #ch.ren_csv_files()
-#os.chdir('test2/')
-os.chdir(FORMATTED)
+os.chdir('test4/')
+#os.chdir(FORMATTED)
 
 #ch.format_csv_futures('Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open Interest', 'TDW', 'TDM', 'Expiry Date')
 #ch.write_expiry_hist()

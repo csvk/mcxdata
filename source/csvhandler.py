@@ -10,6 +10,7 @@ import os
 import dates, utils
 import pandas as pd
 import pickle as pkl
+import csv
 
 #PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Laptop volume rollover
 PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - TDM rollover - 0-I/' # Laptop trading day rollover
@@ -22,6 +23,7 @@ ROLLOVER_MULT = 'rollover_multipliers.txt'
 NONE_SELECTED = 'none_selected.csv.txt'
 FLAT_MULTIPLIER = 'flat_multiplier.csv.txt'
 NXT_SELECTED = 'nxt_selected.csv.txt'
+CHANGED_DATES = 'changed_dates.csv.txt'
 CONTINUOUS = 'continuous/'
 INTERMEDIATE = 'intermediate'
 FINAL = 'final'
@@ -281,7 +283,7 @@ def continuous_contracts_date_rollover_all(delta=None):
     print('Contract created for {} days, {} errors'.format(success, error))
 
 
-def continuous_contracts_date_rollover(delta):
+def continuous_contracts_date_rollover(delta=0):
     """
     Create continuous contracts file with fixed rollover dates based on delta trading days from expiry
     :param delta: Contract rollover day difference from expiry day
@@ -350,7 +352,7 @@ def continuous_contracts_date_rollover(delta):
 
                 date_pd = pd.concat([date_pd, sel_record], axis=0)
 
-            date_pd.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), file), sep=',', index=False)
+            date_pd.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), file), sep=',', index=False)
             print(date, ',Continuous contract created', file)
             success += 1
 
@@ -358,10 +360,10 @@ def continuous_contracts_date_rollover(delta):
             print(date, ',Error creating Continuous contract', file)
             error += 1
 
-    none_selected.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), NONE_SELECTED), sep=',', index=False)
-    flat_multiplier.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + str(delta), FLAT_MULTIPLIER), sep=',', index=False)
+    none_selected.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), NONE_SELECTED), sep=',', index=False)
+    flat_multiplier.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), FLAT_MULTIPLIER), sep=',', index=False)
 
-    with open(CONTINUOUS + INTERMEDIATE + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
+    with open(CONTINUOUS + INTERMEDIATE + '-' + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
         pkl.dump(rollover_multiplier, handle)
 
     print('Contract created for {} days, {} errors'.format(success, error))
@@ -471,7 +473,7 @@ def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
 
     expiry_hist = read_expiry_hist(EXPIRIES)
     e_dates = expiry_hist['expiry_dates']
-    print(e_dates)
+    #print(e_dates)
 
     romans = {0: '0', 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX',
               10: 'X', 11: 'XI',
@@ -479,15 +481,30 @@ def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
 
     #utils.mkdir(CONTINUOUS + FINAL + '-' + str(delta))
 
+    #formatted_csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
+    #formatted_csv_files.sort()
+
     csv_files = [f for f in os.listdir(CONTINUOUS + INTERMEDIATE + '-' + str(delta)) if f.endswith('.csv')]
     csv_files.sort()
     print('Initiating final continuous contract creation for {} days'.format(len(csv_files)))
 
     utils.mkdir(CONTINUOUS + FINAL + '-' + str(delta))
-    #utils.copy_files(CONTINUOUS + INTERMEDIATE + '-' + str(delta), CONTINUOUS + FINAL + '-' + str(delta), csv_files)
+    utils.copy_files(CONTINUOUS + INTERMEDIATE + '-' + str(delta), CONTINUOUS + FINAL + '-' + str(delta), csv_files)
 
     none_selected = pd.read_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), NONE_SELECTED))
 
+    #ns_records_with_nxt_exp_list, check_csv_files_list = [['Symbol', 'Curr Exp', 'Nxt Exp', 'Date']], \
+    #                                                     [['Symbol', 'Curr Exp', 'Nxt Exp', 'Date']]
+
+    none_selected['Date_Symbol'] = none_selected['Date'] + '___' + none_selected['Symbol']
+    none_selected_dates = pd.DataFrame({'Date_Symbol': none_selected['Date_Symbol'].unique()})
+    none_selected_dates_bkp = none_selected_dates
+    none_selected_dates_bkp = none_selected_dates_bkp['Date_Symbol'].str.split('___', expand=True)
+    none_selected_dates_bkp = none_selected_dates_bkp.rename(columns={0:'Date', 1:'Symbol'})
+    #print(type(none_selected_dates), none_selected_dates)
+
+    print('Initiating editing files')
+    changed_dates = {}
     for symbol in none_selected['Symbol'].unique(): #['PEPPER']:#none_selected['Symbol'].unique():
         #print('$$$', symbol)
         ns_records = none_selected.loc[none_selected['Symbol'] == symbol]
@@ -502,40 +519,119 @@ def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
                 ns_records_with_nxt_exp = ns_records.loc[(ns_records['Expiry Date'] == nxt_expiry) &
                                                          (ns_records['Current Expiry'] == curr_exp)]
                 ns_dates_with_nxt_exp = [d for d in ns_records_with_nxt_exp['Date']]
+                #for rec in ns_dates_with_nxt_exp:
+                #    ns_records_with_nxt_exp_list.append([symbol, curr_exp, nxt_expiry, rec])
+                #nxt_exp_count = len(ns_records_with_nxt_exp)
                 if len(ns_dates_with_nxt_exp) > 0:
-                    print(symbol, curr_exp, nxt_expiry, min(ns_dates_with_nxt_exp), max(ns_dates_with_nxt_exp))
+                    #if nxt_exp_count > 0:
+                    #print(symbol, curr_exp, nxt_expiry, min(ns_dates_with_nxt_exp), max(ns_dates_with_nxt_exp))
                     check_csv_files = [d for d in csv_files if
                                        d[0:10] >= min(ns_dates_with_nxt_exp) and d[0:10] <= max(ns_dates_with_nxt_exp)
                                        and d[0:10] <= nxt_expiry]
                     if curr_exp_index >= 1:
                         prev_expiry = e_dates[symbol][e_dates[symbol].index(curr_exp) - 1]
                         check_csv_files = [d for d in check_csv_files if d[0:10] >= prev_expiry]
+                    #for rec in check_csv_files:
+                    #    check_csv_files_list.append([symbol, curr_exp, nxt_expiry, rec])
 
-                    #check_csv_files = [d for d in csv_files if
-                    #                   d[0:10] >= min(ns_dates_with_nxt_exp) and d[0:10] <= max(ns_dates_with_nxt_exp)
-                    #                   and d[0:10] < nxt_expiry]
-                    #if curr_exp_index >= 1:
-                    #    check_csv_files = [d for d in check_csv_files if d[0:10] >= prev_expiry]
-                    #print(ns_dates_with_nxt_exp, check_csv_files)
-                    continuous_con_found_dates = []
-                    csv_dfs, i = [], 0
+                    nxt_exp_recs, nxt_exp_count = pd.DataFrame(), 0
                     for file in check_csv_files:
-                        #print(symbol, file)
-                        csv_dfs.append(pd.read_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), file)))
-                        sel_record = csv_dfs[i].loc[csv_dfs[i]['Symbol'] == symbol]
+                        df = pd.read_csv(file)
+                        #sel_record = df.loc[(df['Symbol'] == symbol) & (df['Expiry Date'] == exp[symbol])]
+                        sel_record = df.loc[(df['Symbol'] == symbol) & (df['Expiry Date'] == nxt_expiry)]
                         if not sel_record.empty:
-                            #print('###', symbol)
-                            continuous_con_found_dates.append(file[0:10])
-                        i += 1
-                    #print(symbol, nxt_exp_ns_dates, continuous_con_found_dates)
+                            nxt_exp_recs = pd.concat([nxt_exp_recs, sel_record], axis=0)
+                            nxt_exp_count += 1
+
+                    curr_exp_count = len(check_csv_files) - nxt_exp_count
+                    if nxt_exp_count >= curr_exp_count:
+                        #    print('####', len(check_csv_files), curr_exp_count, nxt_exp_count, symbol, ns_dates_with_nxt_exp)
+                        #print(type(nxt_exp_recs), nxt_exp_recs)
+
+                        for file in check_csv_files:
+                            change_log = None
+                            date = file[0:10]
+                            #print(symbol, file, date)
+                            rec = nxt_exp_recs.loc[(nxt_exp_recs['Date'] == date)]
+
+                            df = pd.read_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), file))
+                            df_new = df[df.Symbol != symbol]
+
+                            if df.equals(df_new):
+                                if not rec.empty:
+                                    change_log = 'Added'
+                                    none_selected_dates = none_selected_dates[
+                                        none_selected_dates.Date_Symbol != date + '___' + symbol]
+                                else:
+                                    change_log = 'None Selected'
+                            else:
+                                if not rec.empty:
+                                    change_log = 'Replaced'
+                                    none_selected_dates = none_selected_dates[
+                                        none_selected_dates.Date_Symbol != date + '___' + symbol]
+                                else:
+                                    change_log = 'Dropped'
+                                    none_selected_dates = pd.concat([none_selected_dates,
+                                                                     pd.DataFrame(
+                                                                         {'Date_Symbol': [date + '___' + symbol]})],
+                                                                    axis=0)
+                                #dropped_df = pd.DataFrame({'Date_Symbol': date + '___' + symbol})
+                                #print(type(dropped_df), type(none_selected_dates))
+                                #print(dropped_df)
 
 
-                #for date in nxt_exp_ns_records['Date']:
-                    #print('$$$', symbol, date, curr_exp, nxt_expiry)
-                #print(nxt_expiry)
-                #print(nxt_exp_ns_records)
-            #else:
-            #    print('###', symbol, curr_exp, curr_exp_index, len((e_dates[symbol])))
+                            # print(type(df), type(rec))
+                            df_new = pd.concat([df_new, rec], axis=0)
+                            df_new.to_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), file), sep=',',
+                                      index=False)
+
+                            if date not in changed_dates:
+                                changed_dates[date] = [[symbol, curr_exp, nxt_expiry, change_log]]
+                            else:
+                                changed_dates[date].append([symbol, curr_exp, nxt_expiry, change_log])
+
+
+
+                    #for date in nxt_exp_recs['Date']:
+                    #    print(nxt_exp_recs)
+                    #else:
+                    #    print('$$$$', len(check_csv_files), curr_exp_count, nxt_exp_count, symbol, check_csv_files)
+
+    #print(changed_dates)
+
+    #with open('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), NONE_SELECTED), 'wb') as handle:
+    #    pkl.dump(changed_dates, handle)
+
+    none_selected_dates = none_selected_dates['Date_Symbol'].str.split('___', expand=True)
+    none_selected_dates = none_selected_dates.rename(columns={0: 'Date', 1: 'Symbol'})
+    none_selected_dates.to_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), NONE_SELECTED), sep=',', index=False)
+    none_selected_dates_bkp.to_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), 'none_selected_bkp.csv.txt'), sep=',',
+                               index=False)
+
+    with open('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), CHANGED_DATES), 'a') as outcsv:
+        writer = csv.writer(outcsv, delimiter=',', lineterminator='\n')
+        writer.writerow(['Date', 'Symbol', 'Old Exp', 'New Exp', 'Change Log'])
+        for date, data in changed_dates.items():
+            for symbol in data:
+                writer.writerow([date, symbol[0], symbol[1], symbol[2], symbol[3]])
+
+    """
+    with open(file_path, 'a') as outcsv1:
+        writer = csv.writer(outcsv1, delimiter=',', lineterminator='\n')
+        for item in ns_records_with_nxt_exp_list:
+            # Write item to outcsv
+            writer.writerow([item[0], item[1], item[2], item[3]])
+
+    file_path = '{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), 'csv_dates_list.csv.txt')
+    with open(file_path, 'a') as outcsv2:
+        writer = csv.writer(outcsv2, delimiter=',', lineterminator='\n')
+        for item in check_csv_files_list:
+            # Write item to outcsv
+            writer.writerow([item[0], item[1], item[2], item[3]])
+            """
+
+
+
 
 
 
