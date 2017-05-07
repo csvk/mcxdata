@@ -192,7 +192,7 @@ def daily_symbol_check_formatted_continuous_only():
         date = file[0:10]
         f_file = FORMATTED + file
 
-        c_file = FORMATTED + CONTINUOUS + INTERMEDIATE + '-0/' + file
+        c_file = FORMATTED + CONTINUOUS + FINAL + '-0/' + file
         #ra_file = FORMATTED + CONTINUOUS + RATIO_ADJUSTED + file
 
         f_df = pd.read_csv(f_file)

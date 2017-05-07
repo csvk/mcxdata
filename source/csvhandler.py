@@ -187,6 +187,18 @@ def read_rollover_mult_hist(e_file=ROLLOVER_MULT):
     return rollover_mult_hist
 
 
+def show_rollover_mult_hist(e_file=ROLLOVER_MULT):
+
+    r_hist = read_rollover_mult_hist(e_file)
+
+    print(r_hist)
+
+    for symbol, dates in r_hist.items():
+        for date, mult in dates.items():
+            print(symbol, date, mult)
+
+
+
 def dates_missing(start, end):
 
     csv_files = [f[0:10] for f in os.listdir(os.curdir) if f.endswith('.csv')]
@@ -462,6 +474,54 @@ def continuous_contracts_date_rollover_debug(delta=0):
     print(rollover_multiplier)
 
 
+def calc_rollover_multipliers(delta=0):
+
+
+    csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
+    csv_files.sort()
+
+    prev_exp, prev_traded_date = {}, {}
+    rollover_multiplier = {}
+    flat_multiplier = pd.DataFrame()
+    #success, error = 0, 0
+    for file in csv_files:
+        date = file[0:10]
+        df = pd.read_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), file))
+        date_pd = pd.DataFrame()
+
+        for symbol in df['Symbol'].unique():
+            if symbol not in rollover_multiplier:
+                rollover_multiplier[symbol] = {}  # Initialize
+                prev_exp[symbol] = '1900-01-01'   # Initialize
+                prev_traded_date[symbol] = '1900-01-01' # Initialize
+
+            sel_record = df.loc[df['Symbol'] == symbol]
+            # print(type(sel_record['Expiry Date']), sel_record['Expiry Date'].tolist()[0])
+            # print(type(sel_record['Expiry Date'].tolist()[0]), sel_record['Expiry Date'].tolist()[0])
+            #print('####', symbol, date, prev_exp[symbol], sel_record['Expiry Date'].tolist()[0])
+            if sel_record['Expiry Date'].tolist()[0] != prev_exp[symbol]:
+                #print(symbol, date, prev_exp[symbol], sel_record['Expiry Date'].tolist()[0])
+                if sel_record['Expiry Date'].tolist()[0] < prev_exp[symbol]:
+                    print('$$$$$$$$$$$$$$$$ error error', symbol, date, prev_exp[symbol], sel_record['Expiry Date'].tolist()[0])
+                rollover_multiplier[symbol][date] = rollover_multiplier_from_prev_dates(
+                    symbol, date, csv_files, prev_exp[symbol], sel_record['Expiry Date'].tolist()[0])
+                if rollover_multiplier[symbol][date] == 1:
+                    flat_multiplier = pd.concat(
+                        [flat_multiplier, pd.DataFrame({'symbol': [symbol], 'date': [date]})], axis=0)
+                #print('$$$$', symbol, date, rollover_multiplier[symbol][date])
+
+            prev_traded_date[symbol] = date
+            prev_exp[symbol] = sel_record['Expiry Date'].tolist()[0]
+
+    flat_multiplier.to_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), FLAT_MULTIPLIER), sep=',',
+                           index=False)
+
+    with open(CONTINUOUS + FINAL + '-' + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
+        pkl.dump(rollover_multiplier, handle)
+
+    print(rollover_multiplier)
+
+
 def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
     """
     Create continuous contracts file on vol rollover (no cur bar) on top of date rollover
@@ -506,9 +566,10 @@ def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
     print('Initiating editing files')
     changed_dates = {}
     for symbol in none_selected['Symbol'].unique(): #['PEPPER']:#none_selected['Symbol'].unique():
-        #print('$$$', symbol)
+        print('Processing', symbol)
         ns_records = none_selected.loc[none_selected['Symbol'] == symbol]
         #print(ns_records)
+        #print(symbol, rollover_mult[symbol])
 
         for curr_exp in ns_records['Current Expiry'].unique():
             curr_exp_index = e_dates[symbol].index(curr_exp)
@@ -526,7 +587,7 @@ def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
                     #if nxt_exp_count > 0:
                     #print(symbol, curr_exp, nxt_expiry, min(ns_dates_with_nxt_exp), max(ns_dates_with_nxt_exp))
                     check_csv_files = [d for d in csv_files if
-                                       d[0:10] >= min(ns_dates_with_nxt_exp) and d[0:10] <= max(ns_dates_with_nxt_exp)
+                                       d[0:10] >= min(ns_dates_with_nxt_exp) and d[0:10] <= curr_exp #max(ns_dates_with_nxt_exp)
                                        and d[0:10] <= nxt_expiry]
                     if curr_exp_index >= 1:
                         prev_expiry = e_dates[symbol][e_dates[symbol].index(curr_exp) - 1]
@@ -545,13 +606,15 @@ def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
 
                     curr_exp_count = len(check_csv_files) - nxt_exp_count
                     if nxt_exp_count >= curr_exp_count:
-                        #    print('####', len(check_csv_files), curr_exp_count, nxt_exp_count, symbol, ns_dates_with_nxt_exp)
+                        #print('####', symbol, len(check_csv_files), curr_exp_count, nxt_exp_count, ns_dates_with_nxt_exp)
                         #print(type(nxt_exp_recs), nxt_exp_recs)
 
                         for file in check_csv_files:
                             change_log = None
                             date = file[0:10]
                             #print(symbol, file, date)
+                            #print('####', symbol, date, len(check_csv_files), curr_exp_count, nxt_exp_count,
+                            #      ns_dates_with_nxt_exp)
                             rec = nxt_exp_recs.loc[(nxt_exp_recs['Date'] == date)]
 
                             df = pd.read_csv('{}/{}'.format(CONTINUOUS + FINAL + '-' + str(delta), file))
@@ -590,12 +653,17 @@ def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
                             else:
                                 changed_dates[date].append([symbol, curr_exp, nxt_expiry, change_log])
 
+                        #rollover_dates = [r_date for r_date in rollover_mult[symbol] if r_date > date]
+                        #prev_rollover_date = min(r_date for r_date in rollover_mult[symbol] if r_date > date)
+                        #print(rollover_dates)
+                        #print('####', symbol, min(check_csv_files), max(check_csv_files), date)
+                        #if len(rollover_dates) > 0:
+                        #    prev_rollover_date = min(rollover_dates)
+                        #    print('$$$$', symbol, min(check_csv_files), max(check_csv_files), date, prev_rollover_date)
+                        #else:
+                        #    print('$$$$ pass')
 
 
-                    #for date in nxt_exp_recs['Date']:
-                    #    print(nxt_exp_recs)
-                    #else:
-                    #    print('$$$$', len(check_csv_files), curr_exp_count, nxt_exp_count, symbol, check_csv_files)
 
     #print(changed_dates)
 
@@ -1122,7 +1190,7 @@ def ratio_adjust():
     print('Contract created for {} days, {} errors'.format(success, error))
 
 
-def ratio_adjust_same_day(delta):
+def ratio_adjust_same_day(delta=0):
     """
     Forward Ratio adjust continuous contract files
     :return: None, create forward ratio adjusted continuous contracts
@@ -1132,7 +1200,7 @@ def ratio_adjust_same_day(delta):
               10: 'X', 11: 'XI',
               12: 'XII', 13: 'XIII', 14: 'XIV', 15: 'XV'}
 
-    os.chdir(str(delta))
+    #os.chdir(str(delta))
 
     csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
     csv_files.sort()
@@ -1149,7 +1217,8 @@ def ratio_adjust_same_day(delta):
             date = file[0:10]
             df = pd.read_csv(file)
 
-            df['Symbol'] = df['Symbol'].str[:-(len(romans[delta]) + 1)]
+            if delta > 0:
+                df['Symbol'] = df['Symbol'].str[:-(len(romans[delta]) + 1)]
 
             for symbol in df['Symbol'].unique():
                 if symbol not in multipliers:
@@ -1163,7 +1232,8 @@ def ratio_adjust_same_day(delta):
                 df.ix[i, 'Low'] = round(df.ix[i, 'Low'] * multipliers[df.ix[i, 'Symbol']], 2)
                 df.ix[i, 'Close'] = round(df.ix[i, 'Close'] * multipliers[df.ix[i, 'Symbol']], 2)
 
-            df['Symbol'] = df['Symbol'] + '-' + romans[delta]
+            if delta > 0:
+                df['Symbol'] = df['Symbol'] + '-' + romans[delta]
 
             df.to_csv('{}{}'.format(RATIO_ADJUSTED, file), sep=',', index=False)
             print(date, ',Ratio adjusted Continuous contract created', file)

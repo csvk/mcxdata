@@ -204,6 +204,7 @@ conn = sqlite3.connect(EOD_HIST)  # EOD HIST UNADJUSTED, ALL DAYS, ALL FUTURES
 
 os.chdir(CONTINUOUS)
 
+
 os.chdir(RATIO_ADJUSTED)
 
 

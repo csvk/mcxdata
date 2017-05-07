@@ -12,6 +12,8 @@ EXPIRIES = 'expiries.txt'
 ROLLOVER_CLOSE = 'rollover_close.txt'
 ROLLOVER_MULT = 'rollover_multipliers.txt'
 CONTINUOUS = 'continuous/'
+INTERMEDIATE = 'intermediate'
+FINAL = 'final'
 VOL_CONTINUOUS = 'continuous_vol/'
 OI_CONTINUOUS = 'continuous_oi/'
 RATIO_ADJUSTED = 'ratio_adjusted/'
@@ -23,8 +25,8 @@ tracker = SummaryTracker()
 path = PATH
 os.chdir(path)
 #ch.ren_csv_files()
-os.chdir('test4/')
-#os.chdir(FORMATTED)
+#os.chdir('test4/')
+os.chdir(FORMATTED)
 
 #ch.format_csv_futures('Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open Interest', 'TDW', 'TDM', 'Expiry Date')
 #ch.write_expiry_hist()
@@ -35,9 +37,13 @@ os.chdir('test4/')
 #ch.continuous_contracts_vol_oi_rollover('Volume')
 #ch.continuous_contracts_date_rollover()
 #ch.continuous_contracts_date_rollover_debug(1)
-ch.continuous_contracts_date_rollover_vol_rollover_fix()
-#os.chdir(VOL_CONTINUOUS)
-#ch.ratio_adjust()
+#ch.continuous_contracts_date_rollover_vol_rollover_fix()
+#ch.calc_rollover_multipliers()
+#print(ch.read_rollover_mult_hist('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + '0', ROLLOVER_MULT)))
+#ch.show_rollover_mult_hist('{}/{}'.format(CONTINUOUS + FINAL + '-' + '0', ROLLOVER_MULT))
+os.chdir(CONTINUOUS)
+os.chdir(FINAL + '-0')
+ch.ratio_adjust_same_day()
 #os.chdir(RATIO_ADJUSTED)
 #os.chdir('db')
 #os.chdir(CONTINUOUS)
@@ -46,5 +52,7 @@ ch.continuous_contracts_date_rollover_vol_rollover_fix()
 #ch.continuous_contracts_select_days('I')
 #os.chdir(CONTINUOUS)
 #ch.ratio_adjust_same_day()
+
+
 
 tracker.print_diff()
