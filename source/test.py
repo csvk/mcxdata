@@ -20,11 +20,11 @@ PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Lap
 FORMATTED = 'formatted/'
 ROLLOVER_CLOSE = 'rollover_close.txt'
 ROLLOVER_MULT = 'rollover_multipliers.txt'
-CONTINUOUS = 'continuous/1/'
+CONTINUOUS = 'continuous/'
 VOL_CONTINUOUS = 'continuous_vol/'
 OI_CONTINUOUS = 'continuous_oi/'
 RATIO_ADJUSTED = 'ratio_adjusted/'
-
+FINAL = 'final'
 EOD_HIST = 'db/DB.db'
 
 TRADES = 'test/HLLH_GOLD.csv'
@@ -197,13 +197,13 @@ os.chdir(PATH)
 #os.chdir('test')
 os.chdir(FORMATTED)
 exp = csvh.read_expiry_hist()
-#print(exp)
+print(exp)
 
 
 conn = sqlite3.connect(EOD_HIST)  # EOD HIST UNADJUSTED, ALL DAYS, ALL FUTURES
 
 os.chdir(CONTINUOUS)
-
+os.chdir(FINAL + '-0')
 
 os.chdir(RATIO_ADJUSTED)
 

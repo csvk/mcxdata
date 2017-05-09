@@ -216,9 +216,64 @@ def daily_symbol_check_formatted_continuous_only():
         #    print(date, list(raset - cset), 'symbols extra in ratio adjusted')
 
 
+def daily_symbol_check_new():
+    """
+    Test symbol selected or not
+    :return:
+    """
+
+    formatted_files = [f for f in os.listdir(FORMATTED) if f.endswith('.csv')]
+    formatted_files.sort()
+
+
+    i = 0
+    symbols = {}
+    for file in formatted_files:
+        i += 1
+
+        date = file[0:10]
+        f_file = FORMATTED + file
+
+        c_file = FORMATTED + CONTINUOUS + FINAL + '-0/' + file
+        ra_file = FORMATTED + CONTINUOUS + FINAL + '-0/' + RATIO_ADJUSTED + file
+
+        f_df = pd.read_csv(f_file)
+        c_df = pd.read_csv(c_file)
+        ra_df = pd.read_csv(ra_file)
+
+        f_symbols = f_df['Symbol'].unique()
+        #f_symbols = f_symbols + '-I'
+        c_symbols = c_df['Symbol'].unique()
+        ra_symbols = ra_df['Symbol'].unique()
+
+        for symbol in f_symbols:
+            if symbol not in symbols:
+                symbols[symbol] = {'first': i, 'last': i, 'f_count': 0, 'c_count': 0, 'ra_count': 0}
+            symbols[symbol]['f_count'] = symbols[symbol]['f_count'] + 1
+            symbols[symbol]['last'] = i
+        for symbol in c_symbols:
+            symbols[symbol]['c_count'] = symbols[symbol]['c_count'] + 1
+        for symbol in ra_symbols:
+            symbols[symbol]['ra_count'] = symbols[symbol]['ra_count'] + 1
+
+        fset, cset, raset = set(f_symbols), set(c_symbols), set(ra_symbols)
+        #fset, cset = set(f_symbols), set(c_symbols)
+        if len(list(fset - cset)) > 0:
+            print(date, list(fset - cset), 'symbols not in continuous')
+        if len(list(cset - raset)) > 0:
+            print(date, list(cset - raset), 'symbols not in ratio adjusted')
+        if len(list(cset - fset)) > 0:
+            print(date, list(cset - fset), 'symbols extra in continuous')
+        if len(list(raset - cset)) > 0:
+            print(date, list(raset - cset), 'symbols extra in ratio adjusted')
+
+    for symbol, data in symbols.items():
+        print(symbol, data)
+
+
 os.chdir(PATH)
 #os.chdir('test')
-daily_symbol_check_formatted_continuous_only()
+daily_symbol_check_new()
 
 
 
