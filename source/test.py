@@ -81,7 +81,10 @@ def ua_price(conn, symbol, date, expiry):
     c.execute(qry)
     day = c.fetchall()
 
-    return day[0]
+    if len(day) > 0:
+        return day[0]
+    else:
+        return None
 
 
 def compare_test_1():
@@ -159,6 +162,65 @@ def compare_test_2(conn, hist, symbol, leeway):
         prev_day = day
 
 
+    signals, mismatch, signalmismatch, zeroerror = 0, 0, 0, 0
+    messages = []
+    for i in range(2, len(ra_signals_lst)):
+        if ra_signals_lst[i][0] == 'exit' and ua_signals_lst[i][0] == 'exit':
+            signals += 1
+            if ra_signals_lst[i - 1][4] == 0 or ua_signals_lst[i - 1][4] == 0:
+                messages.append([symbol, ra_signals_lst[i -1][2], ra_signals_lst[i][2], 'divided by zero error',
+                                 ra_signals_lst[i][4], ua_signals_lst[i][4]])
+                zeroerror += 1
+            else:
+                ra_growth = round(ra_signals_lst[i][4] / ra_signals_lst[i - 1][4], 4)
+                ua_growth = round(ua_signals_lst[i][4] / ua_signals_lst[i - 1][4], 4)
+                if abs(ra_growth - ua_growth) >= leeway:
+                    messages.append([symbol, ra_signals_lst[i -1][2], ra_signals_lst[i][2], 'signal growth mismatch',
+                                     ra_growth, ua_growth, round(abs(ra_growth - ua_growth), 4)])
+                    mismatch += 1
+                else:
+                    pass
+        elif ra_signals_lst[i][0] == 'entry' and ua_signals_lst[i][0] == 'entry':
+            pass
+        else:
+            print(symbol, ra_signals_lst[i][2], 'Signal Mismatch')
+            signalmismatch += 1
+
+    print(symbol, signals, 'signals tested, found', mismatch, 'mismatches                  ,',
+          zeroerror, 'divisible by zero errors,', signalmismatch, 'signal mismatches')
+
+    return messages
+
+
+def compare_test_3(conn, hist, symbol, leeway):
+    """
+    Compare test results for trade entry on last day of expiry in ratio adjusted continuous data and exit on first day
+    of expiry: between ratio adjusted continuous data vs unadjusted data
+    :return: None
+    """
+
+    ra_hist = read_history(hist, symbol)  # Ratio-adjusted history
+
+    prev_day = None
+    ra_signals_lst = [['Signal', 'Symbol', 'Date', 'Open', 'Close', 'Expiry Date']]
+    ua_signals_lst = [['Signal', 'Symbol', 'Date', 'Open', 'Close', 'Expiry Date']]
+
+    for index, day in ra_hist.iterrows():
+        if prev_day is not None:
+            if day['Expiry Date'] != prev_day['Expiry Date']:
+
+
+                #print(symbol, prev_day['Date'], day['Expiry Date'])
+                ua_prc = ua_price(conn, symbol, prev_day['Date'], day['Expiry Date'])
+                ua_prc_exit = ua_price(conn, symbol, day['Date'], day['Expiry Date'])
+                if ua_prc is not None and ua_prc_exit is not None:
+                    ua_signals_lst.append(['entry', ua_prc[0], ua_prc[1], ua_prc[2], ua_prc[5], ua_prc[10]])
+                    ua_signals_lst.append(['exit', ua_prc_exit[0], ua_prc_exit[1], ua_prc_exit[2], ua_prc_exit[5], ua_prc_exit[10]])
+                    ra_signals_lst.append(['entry', symbol, prev_day['Date'], prev_day['Open'],
+                                           prev_day['Close'], prev_day['Expiry Date']])
+                    ra_signals_lst.append(['exit', symbol, day['Date'], day['Open'], day['Close'],
+                                           day['Expiry Date']])
+        prev_day = day
 
 
     signals, mismatch, signalmismatch, zeroerror = 0, 0, 0, 0
@@ -175,7 +237,10 @@ def compare_test_2(conn, hist, symbol, leeway):
                 ua_growth = round(ua_signals_lst[i][4] / ua_signals_lst[i - 1][4], 4)
                 if abs(ra_growth - ua_growth) >= leeway:
                     messages.append([symbol, ra_signals_lst[i -1][2], ra_signals_lst[i][2], 'signal growth mismatch',
-                                     ra_growth, ua_growth, round(abs(ra_growth - ua_growth), 4)])
+                                     ra_growth, ua_growth, round(abs(ra_growth - ua_growth), 4)
+                                     #ra_signals_lst[i - 1][4], ra_signals_lst[i][4],
+                                     #ua_signals_lst[i - 1][4], ua_signals_lst[i][4],
+                                     ])
                     mismatch += 1
                 else:
                     pass
@@ -213,8 +278,8 @@ hist = read_history_all()
 #compare_test_2(conn, hist, 'GOLD')
 
 messages = []
-for key, data in exp['expiry_dates'].items():
-    messages.append(compare_test_2(conn, hist, str.strip(key), 0.0001))
+for symbol, expiries in exp['expiry_dates'].items():
+    messages.append(compare_test_3(conn, hist, str.strip(symbol), 0.0003))
 
 
 for message in messages:

@@ -318,8 +318,8 @@ def continuous_contracts_date_rollover(delta=0):
     print('Initiating continuous contract creation for {} days'.format(len(csv_files)))
 
     exp = {}
-    rollover_multiplier = {}
-    none_selected, flat_multiplier = pd.DataFrame(), pd.DataFrame()
+    #rollover_multiplier = {}
+    none_selected = pd.DataFrame()
     success, error = 0, 0
     for file in csv_files:
         try:
@@ -329,7 +329,7 @@ def continuous_contracts_date_rollover(delta=0):
             for symbol in df['Symbol'].unique():
                 if symbol not in exp:
                     exp[symbol] = '1900-01-01'  # Initialize
-                    rollover_multiplier[symbol] = {}  # Intialize
+                    #rollover_multiplier[symbol] = {}  # Intialize
 
                 prev_exp = None
                 if expiry_hist['expiry_TDMs'][exp[symbol]] - df['TDM'][0] < delta or exp[symbol] < date:
@@ -348,19 +348,19 @@ def continuous_contracts_date_rollover(delta=0):
                     if not all_records.empty:
                         all_records['Current Expiry'] = [exp[symbol] for rec in all_records.iterrows()]
                         none_selected = pd.concat([none_selected, all_records], axis=0)
-                prev_record = pd.DataFrame()
-                if prev_exp is not None:
-                    prev_record = df.loc[(df['Symbol'] == symbol) & (df['Expiry Date'] == prev_exp)]
-                    if prev_record.empty:
-                        rollover_multiplier[symbol][date] = rollover_multiplier_from_prev_dates(symbol, date, csv_files,
-                                                                                                prev_exp, exp[symbol])
-                        if rollover_multiplier[symbol][date] == 1:
-                            flat_multiplier = pd.concat(
-                                [flat_multiplier, pd.DataFrame({'symbol': [symbol], 'date': [date]})], axis=0)
+                #prev_record = pd.DataFrame()
+                #if prev_exp is not None:
+                    #prev_record = df.loc[(df['Symbol'] == symbol) & (df['Expiry Date'] == prev_exp)]
+                    #if prev_record.empty:
+                    #    rollover_multiplier[symbol][date] = rollover_multiplier_from_prev_dates(symbol, date, csv_files,
+                    #                                                                            prev_exp, exp[symbol])
+                    #    if rollover_multiplier[symbol][date] == 1:
+                    #        flat_multiplier = pd.concat(
+                    #            [flat_multiplier, pd.DataFrame({'symbol': [symbol], 'date': [date]})], axis=0)
 
-                if not sel_record.empty and not prev_record.empty:
-                    rollover_multiplier[symbol][date] = prev_record['Close'].iloc[0] / \
-                                                        sel_record['Close'].iloc[0]
+                #if not sel_record.empty and not prev_record.empty:
+                #    rollover_multiplier[symbol][date] = prev_record['Close'].iloc[0] / \
+                #                                        sel_record['Close'].iloc[0]
 
                 date_pd = pd.concat([date_pd, sel_record], axis=0)
 
@@ -373,14 +373,14 @@ def continuous_contracts_date_rollover(delta=0):
             error += 1
 
     none_selected.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), NONE_SELECTED), sep=',', index=False)
-    flat_multiplier.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), FLAT_MULTIPLIER), sep=',', index=False)
+    #flat_multiplier.to_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), FLAT_MULTIPLIER), sep=',', index=False)
 
-    with open(CONTINUOUS + INTERMEDIATE + '-' + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
-        pkl.dump(rollover_multiplier, handle)
+    #with open(CONTINUOUS + INTERMEDIATE + '-' + str(delta) + '/' + ROLLOVER_MULT, 'wb') as handle:
+    #    pkl.dump(rollover_multiplier, handle)
 
     print('Contract created for {} days, {} errors'.format(success, error))
 
-    print(rollover_multiplier)
+    #print(rollover_multiplier)
 
 
 def continuous_contracts_date_rollover_debug(delta=0):
@@ -522,7 +522,7 @@ def calc_rollover_multipliers(delta=0):
     print(rollover_multiplier)
 
 
-def continuous_contracts_date_rollover_vol_rollover_fix(delta=0):
+def continuous_contracts_date_rollover_step2(delta=0):
     """
     Create continuous contracts file on vol rollover (no cur bar) on top of date rollover
     :return: None, Create continuous contracts file
