@@ -2,7 +2,7 @@
 import csvhandler as ch
 import csvtodb as c2db
 import os
-from pympler.tracker import SummaryTracker
+# from pympler.tracker import SummaryTracker
 import dates
 
 PATH = 'D:/Trading/mcxdata/'
@@ -23,7 +23,7 @@ OI_CONTINUOUS = 'continuous_oi/'
 RATIO_ADJUSTED = 'ratio_adjusted/'
 
 
-tracker = SummaryTracker()
+# tracker = SummaryTracker()
 
 #path = PATH + 'test2/'
 path = PATH
@@ -34,7 +34,13 @@ os.chdir(path)
 
 db = c2db.DataDB(DBPATH)
 
-db.test()
+#db.test()
+#symbols = db.unique_symbols()
+#print(symbols)
+
+#db.select_symbol_records('COTTON')
+#db.write_expiries()
+db.create_continuous_contracts(['ALUMINI'])
 
 #ch.missing_dates(dates.WEEKDAYS)
 
@@ -66,4 +72,4 @@ db.test()
 
 
 
-tracker.print_diff()
+#tracker.print_diff()
