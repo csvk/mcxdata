@@ -15,24 +15,24 @@ import traceback, logging
 
 
 
-location = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data delta' # Laptop
+location = 'D:/Trading/mcxdata/delta' # Laptop
 # location = 'C:/Users/SVK/OneDrive/Python/mcxdata/data' # Desktop
 
 url = 'https://www.mcxindia.com/market-data/bhavcopy'
-chromedriver = 'C:\Program Files (x86)/chromedriver_win32/chromedriver.exe'
+chromedriver = 'C:/Program Files (x86)/chromedriver_win32/chromedriver.exe'
 logfile = 'log.txt'
 
 os.chdir(location)
 log_lines = []
 
 #date_range = dates.dates('2017-02-17', '2017-02-20')
-#date_range = dates.dates('2017-02-25')
+# date_range = dates.dates('2017-12-01')
 date_range = dates.adhoc_dates
 
 options = webdriver.ChromeOptions()
 options.add_argument("--start-maximized")
-prefs = {"download.default_directory" : location}
-options.add_experimental_option("prefs",prefs)
+prefs = {"download.default_directory": location}
+options.add_experimental_option("prefs", prefs)
 #options.add_argument(location)
 
 browser = webdriver.Chrome(chromedriver, chrome_options=options)

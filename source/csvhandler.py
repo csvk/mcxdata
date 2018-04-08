@@ -12,11 +12,12 @@ import pandas as pd
 import pickle as pkl
 import csv
 
-#PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Laptop volume rollover
-PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - TDM rollover - 0-I/' # Laptop trading day rollover
+# PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Laptop volume rollover
+# PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - TDM rollover - 0-I/' # Laptop trading day rollover
+PATH = 'D:/Trading/mcxdata/data'
 FORMATTED = 'formatted/'
 NODATA = 'nodata/'
-NOTRADES = 'notrades.csv'
+NOTRADES = 'notrades.csv'   
 EXPIRIES = 'expiries.txt'
 ROLLOVER_CLOSE = 'rollover_close.txt'
 ROLLOVER_MULT = 'rollover_multipliers.txt'
@@ -32,6 +33,7 @@ VOL_CONTINUOUS = 'continuous_vol/'
 OI_CONTINUOUS = 'continuous_oi/'
 MINEXP_CONTINUOUS = 'continuous_minexp/'
 RATIO_ADJUSTED = 'ratio_adjusted/'
+
 
 def format_csv_futures(*columns):
 
@@ -74,8 +76,6 @@ def format_csv_futures(*columns):
             print(date, ',Error in formatting', file)
             error += 1
 
-
-
     print('{} files formatted, {} errors'.format(success, error))
 
 
@@ -110,7 +110,6 @@ def ren_csv_files():
     print('{} files renamed, {} files with no data, {} errors'.format(success, nodata, error))
 
 
-
 def write_expiry_hist(e_file=EXPIRIES):
 
     expiries = {}
@@ -141,7 +140,7 @@ def write_expiry_hist(e_file=EXPIRIES):
     for key, value in expiry_TDMs.items():
         fdate = key
         if value == 100 and fdate <= max_date:
-            while(value == 100):
+            while value == 100:
                 if os.path.isfile('{}.csv'.format(fdate)):
                     df = pd.read_csv('{}.csv'.format(fdate))
                     expiry_TDMs[key], value = df['TDM'][0], df['TDM'][0]
@@ -158,6 +157,7 @@ def read_expiry_hist(e_file=EXPIRIES):
 
     return expiry_hist
 
+
 def show_expiry_hist(rowwise=False):
 
     e = read_expiry_hist()
@@ -168,8 +168,10 @@ def show_expiry_hist(rowwise=False):
             for v in val:
                 print(key, v)
 
+
 def trading_days_between(start, end, csv_files):
     return len([f[0:10] for f in csv_files if f[0:10] >= start and f[0:10] <= end])
+
 
 def read_rollover_close_hist(e_file=ROLLOVER_CLOSE):
 
@@ -196,7 +198,6 @@ def show_rollover_mult_hist(e_file=ROLLOVER_MULT):
     for symbol, dates in r_hist.items():
         for date, mult in dates.items():
             print(symbol, date, mult)
-
 
 
 def dates_missing(start, end):
@@ -364,7 +365,6 @@ def continuous_contracts_date_rollover(delta=0):
 
 def calc_rollover_multipliers(delta=0):
 
-
     csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
     csv_files.sort()
 
@@ -410,14 +410,12 @@ def continuous_contracts_date_rollover_step2(delta=0):
     :return: None, Create continuous contracts file
     """
 
-
     expiry_hist = read_expiry_hist(EXPIRIES)
     e_dates = expiry_hist['expiry_dates']
 
     romans = {0: '0', 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX',
               10: 'X', 11: 'XI',
               12: 'XII', 13: 'XIII', 14: 'XIV', 15: 'XV'}
-
 
     csv_files = [f for f in os.listdir(CONTINUOUS + INTERMEDIATE + '-' + str(delta)) if f.endswith('.csv')]
     csv_files.sort()
@@ -427,7 +425,6 @@ def continuous_contracts_date_rollover_step2(delta=0):
     utils.copy_files(CONTINUOUS + INTERMEDIATE + '-' + str(delta), CONTINUOUS + FINAL + '-' + str(delta), csv_files)
 
     none_selected = pd.read_csv('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + str(delta), NONE_SELECTED))
-
 
     none_selected['Date_Symbol'] = none_selected['Date'] + '___' + none_selected['Symbol']
     none_selected_dates = pd.DataFrame({'Date_Symbol': none_selected['Date_Symbol'].unique()})
@@ -600,7 +597,6 @@ def continuous_contracts_vol_oi_rollover(parm):
             print(date, ',Continuous contract created', file)
             success += 1
 
-
         except:
             print(date, ',Error creating Continuous contract', file)
             error += 1
@@ -653,8 +649,6 @@ def ratio_adjust_next_day():
             print(date, ',Continuous contract created', file)
             success += 1
 
-
-
         except:
            print(date, ',Error creating Continuous contract', file)
            error += 1
@@ -671,7 +665,6 @@ def ratio_adjust_same_day(delta=0):
     romans = {0: '0', 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX',
               10: 'X', 11: 'XI',
               12: 'XII', 13: 'XIII', 14: 'XIV', 15: 'XV'}
-
 
     csv_files = [f for f in os.listdir(os.curdir) if f.endswith('.csv')]
     csv_files.sort()
@@ -710,9 +703,6 @@ def ratio_adjust_same_day(delta=0):
             print(date, ',Ratio adjusted Continuous contract created', file)
             success += 1
 
-
-
-
         except:
            print(date, ',Error creating Continuous contract', file)
            error += 1
@@ -743,7 +733,20 @@ def format_date(*kwargs):
     print('Contract formatted for {} days, {} errors'.format(success, error))
 
 
+def missing_dates(days):
+    """
+    Find dates for which bhavcopy files have not been downloaded
+    :return: None, create forward ratio adjusted continuous contracts
+    """
 
+    csv_files = [f for f in os.listdir(FORMATTED) if f.endswith('.csv')]
+    csv_files.sort()
+
+    file_dates = [file[0:10] for file in csv_files]
+
+    missing_dates = dates.missing_dates(file_dates, days)
+
+    print(missing_dates)
 
 
 

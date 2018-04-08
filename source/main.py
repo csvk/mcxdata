@@ -1,10 +1,14 @@
 
 import csvhandler as ch
+import csvtodb as c2db
 import os
 from pympler.tracker import SummaryTracker
+import dates
 
-PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Laptop volume rollover
+PATH = 'D:/Trading/mcxdata/'
+#PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - vol - oi rollover/' # Laptop volume rollover
 #PATH = 'C:/Users/Souvik/OneDrive/Python/mcxdata/data - TDM rollover - 0-I/' # Laptop trading day rollover
+DBPATH = 'db/db.db'
 FORMATTED = 'formatted/'
 NODATA = 'nodata/'
 NOTRADES = 'notrades.csv'
@@ -26,8 +30,15 @@ path = PATH
 os.chdir(path)
 #ch.ren_csv_files()
 #os.chdir('test4/')
-os.chdir(FORMATTED)
+#os.chdir(FORMATTED)
 
+db = c2db.DataDB(DBPATH)
+
+db.test()
+
+#ch.missing_dates(dates.WEEKDAYS)
+
+#ch.format_csv_futures('Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open Interest', 'Expiry Date')
 #ch.format_csv_futures('Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Open Interest', 'TDW', 'TDM', 'Expiry Date')
 #ch.write_expiry_hist()
 #ch.show_expiry_hist(False)
@@ -40,7 +51,7 @@ os.chdir(FORMATTED)
 #ch.continuous_contracts_date_rollover_step2()
 #ch.calc_rollover_multipliers()
 #print(ch.read_rollover_mult_hist('{}/{}'.format(CONTINUOUS + INTERMEDIATE + '-' + '0', ROLLOVER_MULT)))
-ch.show_rollover_mult_hist('{}/{}'.format(CONTINUOUS + FINAL + '-' + '0', ROLLOVER_MULT))
+#ch.show_rollover_mult_hist('{}/{}'.format(CONTINUOUS + FINAL + '-' + '0', ROLLOVER_MULT))
 #os.chdir(CONTINUOUS)
 #os.chdir(FINAL + '-0')
 #ch.ratio_adjust_same_day()
