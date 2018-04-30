@@ -35,14 +35,14 @@ class DataDB:
         print('Closing DB connection..')
         self.conn.close()
 
-    def test(self):
+    def dump_record_count(self):
 
         c = self.conn.cursor()
         c.execute('''SELECT COUNT(*) FROM tblDump WHERE InstrumentName = "{}"'''.format(self.instrument_type))
         rows = c.fetchall()
         c.close()
 
-        print(rows)
+        print("Total number of records in the data dump: {}".format(rows[0][0]))
 
     def unique_symbols(self):
 
@@ -54,6 +54,26 @@ class DataDB:
         c.close()
 
         return [symbol[0] for symbol in rows]
+
+    def trading_days(self):
+        '''
+        Populate trading_days dictionary
+        :param symbols: [list of symbols], no need to pass anything if for all symbols
+        :return: dict {trading_day#1: idx#1, ....}
+        '''
+
+        qry = '''SELECT DISTINCT Date FROM tblDump 
+                  WHERE InstrumentName = "{}" ORDER BY Date'''.format(self.instrument_type)
+
+        c = self.conn.cursor()
+        c.execute(qry)
+        rows = c.fetchall()
+        c.close()
+
+        dates = [row[0] for row in rows]
+        date_idx = [i + 1 for i in range(0, len(rows))]
+
+        return dict(zip(dates, date_idx))
 
     def select_symbol_records(self, symbol):
 
@@ -78,8 +98,9 @@ class DataDB:
 
         truncateQuery = '''DELETE FROM tblExpiries'''
 
-        insertQry = '''INSERT INTO tblExpiries SELECT DISTINCT Symbol, ExpiryDate FROM tblDump 
-                  WHERE InstrumentName = "{}"'''.format(self.instrument_type)
+        insertQry = '''INSERT INTO tblExpiries
+                       SELECT DISTINCT Symbol, ExpiryDate FROM tblDump
+                        WHERE InstrumentName = "{}"'''.format(self.instrument_type)
 
         c = self.conn.cursor()
         c.execute(truncateQuery)
@@ -109,7 +130,8 @@ class DataDB:
         qry = '''SELECT Symbol, Date, Open, High, Low, Close, VolumeLots, OpenInterestLots, ExpiryDate 
                    FROM tblDump
                   WHERE Symbol = "{}"
-                  ORDER BY Symbol ASC, Date ASC, ExpiryDate ASC'''.format(symbol)
+                    AND InstrumentName = "{}"
+                  ORDER BY Symbol ASC, Date ASC, ExpiryDate ASC'''.format(symbol, self.instrument_type)
 
         df = pd.read_sql_query(qry, self.conn)
 
@@ -117,13 +139,16 @@ class DataDB:
 
     def create_continuous_contracts(self, symbols, delta=0):
         '''
-
+        Create continuous contracts with rollover day on delta trading days from expiry
+        delta = 0 means rollover happens on expiry day
         :param symbols: [list of symbols], no need to pass anything if for all symbols
         :return:
         '''
 
         if len(symbols) == 0:
             symbols = self.unique_symbols()
+
+        trading_days = self.trading_days()
 
         for symbol in symbols:
             expiries = self.expiry_history(symbol)
@@ -136,6 +161,11 @@ class DataDB:
             curr_expiry = expiries[0]
             #for date in dates:
             #    sel
+            #print("SVK")
+            #print(df)
+            #sel_record = df.loc[df['ExpiryDate'] == curr_expiry]
+            sel_record = df[df['ExpiryDate'] == curr_expiry]
+            print(sel_record)
 
 
 

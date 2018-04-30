@@ -1,6 +1,6 @@
 
 import csvhandler as ch
-import csvtodb as c2db
+import datadbhandler as dbhandler
 import os
 # from pympler.tracker import SummaryTracker
 import dates
@@ -17,12 +17,12 @@ path = PATH
 os.chdir(path)
 #ch.ren_csv_files()
 
-db = c2db.DataDB(DBPATH)
+db = dbhandler.DataDB(DBPATH)
 
-#db.test()
 #symbols = db.unique_symbols()
 #print(symbols)
 
+#db.dump_record_count()
 #db.select_symbol_records('COTTON')
 #db.write_expiries()
 db.create_continuous_contracts(['ALUMINI'])
