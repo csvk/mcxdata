@@ -2,7 +2,7 @@
 import csvhandler as ch
 import datadbhandler as dbhandler
 import os
-# from pympler.tracker import SummaryTracker
+#from pympler.tracker import SummaryTracker
 import dates
 
 PATH = 'D:/Trading/mcxdata/'
@@ -11,7 +11,7 @@ DBPATH = 'db/db.db'
 
 
 
-# tracker = SummaryTracker()
+#tracker = SummaryTracker()
 
 path = PATH
 os.chdir(path)
