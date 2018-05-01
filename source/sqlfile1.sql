@@ -37,4 +37,8 @@ CREATE TABLE "tblDump2" (
 CREATE INDEX `idxFutures` ON `tblFutures` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC)
     
 CREATE INDEX `idxDump` ON `tblDump` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC, `InstrumentName` ASC )
+
+select symbol, count(*) from tblFutures group by symbol
+
+select symbol, count(*) from (select distinct symbol, date from tblDump) group by symbol
     

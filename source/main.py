@@ -25,8 +25,10 @@ db = dbhandler.DataDB(DBPATH)
 #db.dump_record_count()
 #db.select_symbol_records('COTTON')
 #db.write_expiries()
-db.create_continuous_contracts(['ALUMINI'])
+#db.create_continuous_contracts(['ALUMINI'], delta=0)
+db.create_continuous_contracts()
 
-
+#d = dates.dates('2018-04-06', '2018-04-10', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
+#print(len(d))
 
 #tracker.print_diff()

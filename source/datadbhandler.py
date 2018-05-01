@@ -21,11 +21,11 @@ class DataDB:
     # variables
 
     instrument_type = 'FUTCOM'
-    trading_days = dict()
+    trading_day_idx = dict()
 
     def trading_days(self):
         '''
-        Populate trading_days dictionary
+        Populate trading_day_idx dictionary
         :param symbols: [list of symbols], no need to pass anything if for all symbols
         :return: dict {trading_day#1: idx#1, ....}
         '''
@@ -53,7 +53,7 @@ class DataDB:
         self.conn = sqlite3.connect(db)
         self.engine = create_engine('sqlite:///{}'.format(db))
 
-        self.trading_days = self.trading_days()
+        self.trading_day_idx = self.trading_days()
 
     def __del__(self):
 
@@ -82,10 +82,32 @@ class DataDB:
 
     def trading_day(self, date):
         '''
-        Return trading day idx from trading_days
+        Return trading day idx from trading_day_idx
         :param symbols: date in YYYY-MM-DD format
-        :return: trading day idx from trading_days
+        :return: trading day idx from trading_day_idx
         '''
+
+        trading_day_list = list(self.trading_day_idx.keys())
+        trading_day_list.sort()
+        #print(type(trading_day_list))
+        last_trading_day = trading_day_list[len(trading_day_list) - 1]
+        if date > last_trading_day:
+            weekdays_till_date = dates.dates(last_trading_day, date, 
+                                             ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
+            return self.trading_day_idx[last_trading_day] + len(weekdays_till_date) - 1
+        else:
+            if date in self.trading_day_idx:
+                return self.trading_day_idx[date]
+            else:
+                found = False
+                save_date = date
+                while not found:
+                    date = dates.relativedate(date, days=-1)
+                    if date in self.trading_day_idx:
+                        return self.trading_day_idx[date]
+                        found = True
+                    if dates.datediff(save_date, date) > 10:
+                        return None
 
     def select_symbol_records(self, symbol):
 
@@ -151,9 +173,9 @@ class DataDB:
 
     def insert_records(self, df):
 
-        df.to_sql('tblFutures', self.engine, index=False, if_exists='replace')
+        df.to_sql('tblFutures', self.engine, index=False, if_exists='append')
 
-    def create_continuous_contracts(self, symbols, delta=0):
+    def create_continuous_contracts(self, symbols=[], delta=0):
         '''
         Create continuous contracts with rollover day on delta trading days from expiry
         delta = 0 means rollover happens on expiry day
@@ -164,42 +186,43 @@ class DataDB:
         if len(symbols) == 0: # no symbol passed, default to all symbols
             symbols = self.unique_symbols()
 
-        #trading_days = self.trading_days() # get all trading_days
-
+        records = pd.DataFrame()
         for symbol in symbols:
-            #expiries = self.expiry_history(symbol)
-            expiries = ['2011-03-31', '2011-04-28', '2011-05-31']
+            print("Creating for {}".format(symbol))
+            expiries = self.expiry_history(symbol)
+            #expiries = ['2011-03-31', '2011-04-28', '2011-05-31']
 
             df = self.symbol_records(symbol)
 
             dates = list(set(df['Date'].tolist())) # unique dates
             dates.sort()
 
-            df['TradingDay'] = [self.trading_days[date] for date in df['Date']]    
+            #print(dates)
 
-            records = pd.DataFrame()
+            df['TradingDay'] = [self.trading_day_idx[date] for date in df['Date']]    
 
-            next_trading_day = 0
+            next_trading_day_idx = 0
             expiry_idx = 0
 
             for expiry in expiries:
                 curr_expiry = expiries[expiry_idx]
-                curr_expiry_idx = self.trading_days[curr_expiry]
+                curr_expiry_idx = self.trading_day(curr_expiry)
                 sel_records = df.loc[(df['ExpiryDate'] == curr_expiry) & 
-                                     (df['TradingDay'] < curr_expiry_idx + delta ) &
-                                     (df['TradingDay'] >= next_trading_day)]
+                                     (df['TradingDay'] < curr_expiry_idx - delta ) &
+                                     (df['TradingDay'] >= next_trading_day_idx)]
                 records = pd.concat([records, sel_records], axis=0)
 
-                next_trading_day = curr_expiry_idx + delta
+                next_trading_day_idx = curr_expiry_idx - delta
                 expiry_idx = expiry_idx + 1
+                #print(curr_expiry, curr_expiry_idx, next_trading_day_idx)
 
-            #print(records)
+        #print(records)
 
-            display = records.reindex_axis(['Date', 'ExpiryDate', 'TradingDay'], axis=1)
-            print(display)
-            df_insert = records.drop(['TradingDay'], axis=1)
+        display = records.reindex(['Date', 'ExpiryDate', 'TradingDay'], axis=1)
+        #print(display)
+        df_insert = records.drop(['TradingDay'], axis=1)
 
-            self.insert_records(df_insert)
+        self.insert_records(df_insert)
 
 
 
