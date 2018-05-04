@@ -41,4 +41,11 @@ CREATE INDEX `idxDump` ON `tblDump` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC
 select symbol, count(*) from tblFutures group by symbol
 
 select symbol, count(*) from (select distinct symbol, date from tblDump) group by symbol
+
+-- Find rows missing in tblFutures
+select tbldump.symbol, tbldump.date, tblDump.ExpiryDate
+from tblDump left outer join tblFutures 
+on tbldump.Symbol = tblFutures.Symbol
+and tbldump.Date = tblFutures.Date
+where tblFutures.date is null
     

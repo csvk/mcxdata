@@ -22,12 +22,11 @@ class DataDB:
 
     instrument_type = 'FUTCOM'
     trading_day_idx = dict()
+    trading_day_idx_rev = dict()
 
-    def trading_days(self):
+    def set_trading_day_idx(self):
         '''
-        Populate trading_day_idx dictionary
-        :param symbols: [list of symbols], no need to pass anything if for all symbols
-        :return: dict {trading_day#1: idx#1, ....}
+        Populate trading_day_idx, trading_day_idx_rev dictionary
         '''
 
         qry = '''SELECT DISTINCT Date FROM tblDump 
@@ -41,7 +40,7 @@ class DataDB:
         dates = [row[0] for row in rows]
         date_idx = [i + 1 for i in range(0, len(rows))]
 
-        return dict(zip(dates, date_idx))
+        trading_day_idx, trading_day_idx_rev = dict(zip(dates, date_idx)), dict(zip(date_idx, dates))
 
     def __init__(self, db, type='FUTCOM'):
 
@@ -53,7 +52,8 @@ class DataDB:
         self.conn = sqlite3.connect(db)
         self.engine = create_engine('sqlite:///{}'.format(db))
 
-        self.trading_day_idx = self.trading_days()
+        #self.trading_day_idx = self.trading_days()
+        self.set_trading_day_idx()
 
     def __del__(self):
 
@@ -83,22 +83,22 @@ class DataDB:
     def trading_day(self, date):
         '''
         Return trading day idx from trading_day_idx
-        :param symbols: date in YYYY-MM-DD format
+        :param symbols: expiry date in YYYY-MM-DD format
         :return: trading day idx from trading_day_idx
         '''
 
         trading_day_list = list(self.trading_day_idx.keys())
         trading_day_list.sort()
-        #print(type(trading_day_list))
+
         last_trading_day = trading_day_list[len(trading_day_list) - 1]
-        if date > last_trading_day:
+        if date > last_trading_day: # If passed expiry date is beyond last available bar
             weekdays_till_date = dates.dates(last_trading_day, date, 
                                              ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
             return self.trading_day_idx[last_trading_day] + len(weekdays_till_date) - 1
         else:
-            if date in self.trading_day_idx:
+            if date in self.trading_day_idx: # If passed expiry date is a trading day
                 return self.trading_day_idx[date]
-            else:
+            else: # If passed expiry date is not a trading day, use previous trading day
                 found = False
                 save_date = date
                 while not found:
@@ -129,6 +129,9 @@ class DataDB:
             print(i, row)
 
     def write_expiries(self):
+        '''
+        Write all expiry dates in tblExpiries
+        '''
 
         truncateQuery = '''DELETE FROM tblExpiries'''
 
@@ -146,6 +149,11 @@ class DataDB:
         c.close()
 
     def expiry_history(self, symbol):
+        '''
+        Return list of expiry dates for symbol
+        :param symbols: symbol
+        :return: [expiry_date1, expiry_date2,...]
+        '''
 
         qry = '''SELECT * 
                    FROM tblExpiries
@@ -172,6 +180,9 @@ class DataDB:
         return df
 
     def insert_records(self, df):
+        '''
+        Insert passed records into tblFutures
+        '''
 
         df.to_sql('tblFutures', self.engine, index=False, if_exists='append')
 
@@ -194,7 +205,8 @@ class DataDB:
 
             df = self.symbol_records(symbol)
 
-            dates = list(set(df['Date'].tolist())) # unique dates
+            #dates = list(set(df['Date'].tolist())) # unique dates
+            dates = df['Date'].unique()
             dates.sort()
 
             #print(dates)
@@ -224,6 +236,120 @@ class DataDB:
 
         self.insert_records(df_insert)
 
+        #self.manage_missed_records(symbols, delta)
+
+    def manage_missed_records(self, symbols=[], delta=0):
+        '''
+        Identify records missed while creating continuous contracts and insert them
+        :param symbols: [list of symbols], no need to pass anything if for all symbols
+        :return:
+        '''
+
+        if len(symbols) == 0: # no symbol passed, default to all symbols
+            symbols = self.unique_symbols()
+
+        # Identify symbol-date combinations which were available in tblDump but not included in tblFutures
+
+        qry = '''SELECT tblDump.Symbol, tblDump.Date, tblDump.ExpiryDate, tblDump.VolumeLots
+                   FROM tblDump LEFT OUTER JOIN tblFutures
+                     ON tblDump.Symbol = tblFutures.Symbol
+                    AND tblDump.Date = tblFutures.Date
+                  WHERE tblFutures.date is NULL
+                  ORDER BY tblDump.Symbol ASC, tblDump.Date ASC, tblDump.ExpiryDate ASC'''
+
+        missed_records = pd.read_sql_query(qry, self.conn)
+        #select_missed_records = missed_records[missed_records.Symbol.isin(symbols)]
+
+        select_missed_records = missed_records if len(symbols) == 0 else missed_records[missed_records.Symbol.isin(symbols)]
+
+        symbols_considered = dict()
+
+        selected_records, eligible_records = pd.DataFrame(), pd.DataFrame()
+
+        curr_symbol = ""
+
+        for row in select_missed_records.itertuples(index=True, name='Pandas'):
+            symbol, date, expiry_date = getattr(row, "Symbol"), getattr(row, "Date"), getattr(row, "ExpiryDate")
+            #print(symbol, date, expiry_date)
+
+            if symbol != curr_symbol:
+                print(symbol, ' processing...')
+                curr_symbol = symbol
+
+            if symbol not in symbols_considered:
+                symbols_considered[symbol] = '1900-01-01'
+            
+            if date <= symbols_considered[symbol]:
+                continue
+
+            prev_exp_qry = '''SELECT ExpiryDate FROM tblFutures 
+                               WHERE Symbol = "{}" AND Date < "{}" ORDER BY Date DESC'''.format(symbol, date)
+            next_exp_qry = '''SELECT ExpiryDate FROM tblFutures 
+                               WHERE Symbol = "{}" AND Date > "{}" ORDER BY Date ASC'''.format(symbol, date)                          
+
+            c = self.conn.cursor()
+            c.execute(prev_exp_qry)
+            prev_exp = c.fetchone()
+            if prev_exp is None:
+                prev_exp = expiry_date
+                print('Prev expiry not found, setting to current expiry {}'.format(expiry_date))
+            else:
+                prev_exp = prev_exp[0]
+            c.execute(next_exp_qry)
+            next_exp = c.fetchone()
+            if next_exp is None:
+                next_exp = expiry_date
+                print('Next expiry not found, setting to current expiry {}'.format(expiry_date))
+            else:
+                next_exp = next_exp[0]
+            #print(symbol, date, expiry_date, prev, next)
+            #c.close()
+
+            selected_expiry_row_qry = '''SELECT COUNT(*), SUM(VolumeLots) FROM tblFutures
+                                          WHERE Symbol = "{}" 
+                                            AND Date >= "{}" 
+                                            AND ExpiryDate = "{}"'''.format(symbol, date, prev_exp)
+
+            
+            #print(selected_expiry_row_qry)
+            c.execute(selected_expiry_row_qry)
+            result = c.fetchone()
+
+            # temp to be removed
+
+            selected_expiry_row_qry_temp = '''SELECT * FROM tblFutures
+                                          WHERE Symbol = "{}" 
+                                            AND Date >= "{}" 
+                                            AND ExpiryDate = "{}"'''.format(symbol, date, prev_exp)
+
+            selected_records = pd.concat([selected_records, pd.read_sql_query(qry, self.conn)], axis=0)
+
+            # end temp
+
+            eligible_missed_records = select_missed_records[(missed_records.Symbol == symbol) &
+                                                            (missed_records.ExpiryDate == next_exp) &
+                                                            (missed_records.Date >= date)]
+
+            #eligible_missed_records = eligible_missed_records[missed_records.Date >= date]
+                                                        
+            eligible_missed_records_count = eligible_missed_records.shape[0]
+
+            #print(eligible_missed_records)
+
+            eligible_records = pd.concat([eligible_records, eligible_missed_records], axis=0)
+
+            #print(symbol, date, 'exp ', expiry_date, 'selected count, volume ', result, 
+            #      'eligible count, volume ', eligible_missed_records_count, eligible_missed_records.VolumeLots.sum())
+
+            #print(eligible_missed_records.iloc[eligible_missed_records.shape[0] - 1])
+
+            if eligible_missed_records.shape[0] > 0:
+                symbols_considered[symbol] = eligible_missed_records.iloc[eligible_missed_records.shape[0] - 1]['Date']
+
+            c.close()
+        
+        selected_records.to_csv('selected_records.csv', sep=',', index=False)
+        eligible_records.to_csv('eligible_records.csv', sep=',', index=False)
 
 
 
