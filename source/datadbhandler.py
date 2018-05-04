@@ -13,6 +13,8 @@ import pickle as pkl
 import csv
 import sqlite3
 from sqlalchemy import create_engine
+#from pympler.tracker import SummaryTracker, ObjectTracker
+import gc
 
 
 class DataDB:
@@ -258,21 +260,39 @@ class DataDB:
                   ORDER BY tblDump.Symbol ASC, tblDump.Date ASC, tblDump.ExpiryDate ASC'''
 
         missed_records = pd.read_sql_query(qry, self.conn)
-        #select_missed_records = missed_records[missed_records.Symbol.isin(symbols)]
+        select_missed_records = missed_records if len(symbols) == 0 \
+            else missed_records[missed_records.Symbol.isin(symbols)]
 
-        select_missed_records = missed_records if len(symbols) == 0 else missed_records[missed_records.Symbol.isin(symbols)]
+        try:
+            os.remove('selected_records.csv')
+            os.remove('eligible_records.csv')
+        except OSError:
+            pass
 
         symbols_considered = dict()
 
-        selected_records, eligible_records = pd.DataFrame(), pd.DataFrame()
-
         curr_symbol = ""
+        c = self.conn.cursor()
+
+        selected_records, eligible_records = pd.DataFrame(), pd.DataFrame()
+        selected_records_isempty, eligible_records_isempty = True, True
 
         for row in select_missed_records.itertuples(index=True, name='Pandas'):
             symbol, date, expiry_date = getattr(row, "Symbol"), getattr(row, "Date"), getattr(row, "ExpiryDate")
-            #print(symbol, date, expiry_date)
 
             if symbol != curr_symbol:
+                if not selected_records_isempty:
+                    selected_records = pd.concat([pd.read_csv('selected_records.csv'), selected_records], axis=0)
+                if len(selected_records.index) > 0:
+                    selected_records.to_csv('selected_records.csv', sep=',', index=False)
+                    selected_records_isempty = False
+                if not eligible_records_isempty:
+                    eligible_records = pd.concat([pd.read_csv('eligible_records.csv'), eligible_records], axis=0)
+                if len(eligible_records.index) > 0:
+                    eligible_records.to_csv('eligible_records.csv', sep=',', index=False)
+                    eligible_records_isempty = False
+                selected_records, eligible_records = selected_records[0:0], eligible_records[0:0]
+
                 print(symbol, ' processing...')
                 curr_symbol = symbol
 
@@ -287,31 +307,26 @@ class DataDB:
             next_exp_qry = '''SELECT ExpiryDate FROM tblFutures 
                                WHERE Symbol = "{}" AND Date > "{}" ORDER BY Date ASC'''.format(symbol, date)                          
 
-            c = self.conn.cursor()
             c.execute(prev_exp_qry)
             prev_exp = c.fetchone()
             if prev_exp is None:
                 prev_exp = expiry_date
-                print('Prev expiry not found, setting to current expiry {}'.format(expiry_date))
+                print('{}: Prev expiry not found, setting to current expiry {}'.format(date, expiry_date))
             else:
                 prev_exp = prev_exp[0]
             c.execute(next_exp_qry)
             next_exp = c.fetchone()
             if next_exp is None:
                 next_exp = expiry_date
-                print('Next expiry not found, setting to current expiry {}'.format(expiry_date))
+                print('{}: Next expiry not found, setting to current expiry {}'.format(date, expiry_date))
             else:
                 next_exp = next_exp[0]
-            #print(symbol, date, expiry_date, prev, next)
-            #c.close()
 
             selected_expiry_row_qry = '''SELECT COUNT(*), SUM(VolumeLots) FROM tblFutures
                                           WHERE Symbol = "{}" 
                                             AND Date >= "{}" 
                                             AND ExpiryDate = "{}"'''.format(symbol, date, prev_exp)
 
-            
-            #print(selected_expiry_row_qry)
             c.execute(selected_expiry_row_qry)
             result = c.fetchone()
 
@@ -322,40 +337,31 @@ class DataDB:
                                             AND Date >= "{}" 
                                             AND ExpiryDate = "{}"'''.format(symbol, date, prev_exp)
 
-            selected_records = pd.concat([selected_records, pd.read_sql_query(qry, self.conn)], axis=0)
+            selected_records = pd.concat([selected_records,
+                                          pd.read_sql_query(selected_expiry_row_qry_temp, self.conn)], axis=0)
 
             # end temp
 
             eligible_missed_records = select_missed_records[(missed_records.Symbol == symbol) &
                                                             (missed_records.ExpiryDate == next_exp) &
                                                             (missed_records.Date >= date)]
-
-            #eligible_missed_records = eligible_missed_records[missed_records.Date >= date]
                                                         
             eligible_missed_records_count = eligible_missed_records.shape[0]
 
-            #print(eligible_missed_records)
-
             eligible_records = pd.concat([eligible_records, eligible_missed_records], axis=0)
-
-            #print(symbol, date, 'exp ', expiry_date, 'selected count, volume ', result, 
-            #      'eligible count, volume ', eligible_missed_records_count, eligible_missed_records.VolumeLots.sum())
-
-            #print(eligible_missed_records.iloc[eligible_missed_records.shape[0] - 1])
 
             if eligible_missed_records.shape[0] > 0:
                 symbols_considered[symbol] = eligible_missed_records.iloc[eligible_missed_records.shape[0] - 1]['Date']
 
-            c.close()
-        
-        selected_records.to_csv('selected_records.csv', sep=',', index=False)
-        eligible_records.to_csv('eligible_records.csv', sep=',', index=False)
+            gc.collect()
 
+        c.close()
 
-
-
-
-
-
-
-
+        if not selected_records_isempty:
+            selected_records = pd.concat([pd.read_csv('selected_records.csv'), selected_records], axis=0)
+        if len(selected_records.index) > 0:
+            selected_records.to_csv('selected_records.csv', sep=',', index=False)
+        if not eligible_records_isempty:
+            eligible_records = pd.concat([pd.read_csv('eligible_records.csv'), eligible_records], axis=0)
+        if len(eligible_records.index) > 0:
+            eligible_records.to_csv('eligible_records.csv', sep=',', index=False)
