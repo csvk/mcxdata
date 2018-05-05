@@ -206,8 +206,8 @@ class DataDB:
 
             df = self.symbol_records(symbol)
 
-            dates = df['Date'].unique()
-            dates.sort()
+            #dates = df['Date'].unique()
+            #dates.sort()
 
             df['TradingDay'] = [self.trading_day_idx[date] for date in df['Date']]    
 
@@ -414,3 +414,157 @@ class DataDB:
 
         all_selected_records.to_csv('all_selected_records.csv', sep=',', index=False)
         all_eligible_records.to_csv('all_eligible_records.csv', sep=',', index=False)
+
+    def update_continuous_contract(self, symbols=[]):
+
+        selected_records = pd.read_csv('selected_records_2.csv')
+        eligible_records = pd.read_csv('eligible_records_2.csv')
+
+        c = self.conn.cursor()
+
+        # delete records
+        for idx, row in selected_records.iterrows():
+            if row['Symbol'] not in symbols and symbols != []:
+                continue
+            print(row['Symbol'], row['Date'])
+            delete_qry = '''DELETE FROM tblFutures 
+                             WHERE Symbol = "{}"
+                               AND Date = "{}"'''.format(row['Symbol'], row['Date'])
+            c.execute(delete_qry)
+            self.conn.commit()
+
+        insert_rows = []
+        for idx, row in eligible_records.iterrows():
+            if row['Symbol'] not in symbols and symbols != []:
+                continue
+            insert_rows.append((row['Symbol'], row['Date'], row['Open'], row['High'], row['Low'], row['Close'],
+                                                   row['VolumeLots'], row['OpenInterestLots'], row['ExpiryDate']))
+
+        print(insert_rows)
+        insert_qry = '''INSERT INTO tblFutures VALUES (?,?,?,?,?,?,?,?,?)'''
+        c.executemany(insert_qry, insert_rows)
+        self.conn.commit()
+        
+
+
+
+    def manage_missed_records_2(self, symbols=[], delta=0):
+        '''
+        Identify records missed while creating continuous contracts and insert them
+        :param symbols: [list of symbols], no need to pass anything if for all symbols
+        :return:
+        '''
+
+        if len(symbols) == 0:  # no symbol passed, default to all symbols
+            symbols = self.unique_symbols()
+
+        # Identify symbol-date combinations which were available in tblDump but not included in tblFutures
+
+        qry = '''SELECT tblDump.Symbol, tblDump.Date, tblDump.ExpiryDate, tblDump.VolumeLots
+                   FROM tblDump LEFT OUTER JOIN tblFutures
+                     ON tblDump.Symbol = tblFutures.Symbol
+                    AND tblDump.Date = tblFutures.Date
+                  WHERE tblFutures.date is NULL
+                  ORDER BY tblDump.Symbol ASC, tblDump.Date ASC, tblDump.ExpiryDate ASC'''
+
+        missed_records = pd.read_sql_query(qry, self.conn)
+        select_missed_records = missed_records if len(symbols) == 0 \
+            else missed_records[missed_records.Symbol.isin(symbols)]
+
+        try:
+            os.remove('selected_records_2.csv')
+            os.remove('eligible_records_2.csv')
+        except OSError:
+            pass
+
+        symbols_considered = dict()
+
+        curr_symbol = ""
+        c = self.conn.cursor()
+
+        selected_records, eligible_records = pd.DataFrame(), pd.DataFrame()
+        selected_records_isempty, eligible_records_isempty = True, True
+
+        for symbol in select_missed_records['Symbol'].unique():
+            symbol_missed_records = select_missed_records[select_missed_records.Symbol == symbol]
+
+            for expiry_date in symbol_missed_records['ExpiryDate'].unique():
+                symbol_missed_records_for_expiry = \
+                    symbol_missed_records[symbol_missed_records.ExpiryDate == expiry_date]
+                all_dates = symbol_missed_records_for_expiry['Date'].unique()
+                all_dates.sort()
+
+                prev_date_qry = '''SELECT Date, ExpiryDate FROM tblFutures 
+                                   WHERE Symbol = "{}" AND Date < "{}" ORDER BY Date DESC'''.format(symbol, all_dates[0])
+                next_date_qry = '''SELECT Date, ExpiryDate FROM tblFutures 
+                                   WHERE Symbol = "{}" AND Date > "{}" ORDER BY Date ASC'''.format(
+                    symbol, all_dates[len(all_dates) - 1])
+
+                #print(symbol, expiry_date)
+                c.execute(prev_date_qry)
+                prev_date_record = c.fetchone()
+                #print(prev_date_record)
+                if prev_date_record is None:
+                    prev_date, prev_exp = '1900-01-01', expiry_date
+                    #print('{}: Prev expiry not found, setting to current expiry {}'.format(symbol, expiry_date))
+                else:
+                    prev_date, prev_exp = prev_date_record[0], prev_date_record[1]
+                c.execute(next_date_qry)
+                next_date_record = c.fetchone()
+                #print(next_date_record)
+                if next_date_record is None:
+                    next_date, next_exp = '2100-12-31', expiry_date
+                    #print('{}: Next expiry not found, setting to current expiry {}'.format(symbol, expiry_date))
+                else:
+                    next_date, next_exp = next_date_record[0], next_date_record[1]
+                    
+                if next_exp < expiry_date:
+                    print('{}: skipping expiry date {}, prev exp {} next exp {}'.format(symbol, expiry_date,
+                                                                                        prev_exp, next_exp))
+                    continue
+                else:
+                    print('{}: including expiry date {}, prev exp {} next exp {}'.format(symbol, expiry_date,
+                                                                                        prev_exp, next_exp))
+
+                prev_date_plus_1, next_date_minus_1 = dates.relativedate(prev_date, days=1), \
+                                                      dates.relativedate(next_date, days=-1)
+
+                selected_records_qry = '''SELECT * FROM tblFutures
+                                                   WHERE Symbol = "{}" 
+                                                     AND Date BETWEEN "{}" AND "{}"'''.format(
+                    symbol, prev_date_plus_1, next_date_minus_1)
+
+                selected_records_temp = pd.read_sql_query(selected_records_qry, self.conn)
+                #selected_records = pd.concat([selected_records, selected_records_temp], axis=0)
+
+                #eligible_missed_records = \
+                #    symbol_missed_records_for_expiry[(symbol_missed_records_for_expiry.Date >= prev_date) &
+                #                                     (symbol_missed_records_for_expiry.Date <= next_date)]
+
+                eligible_records_qry = '''SELECT Symbol, Date, Open, High, Low, Close, VolumeLots, OpenInterestLots, ExpiryDate 
+                                            FROM tblDump
+                                           WHERE Symbol = "{}" 
+                                             AND Date BETWEEN "{}" AND "{}"
+                                             AND ExpiryDate = "{}"'''.format(
+                    symbol, prev_date_plus_1, next_date_minus_1, expiry_date)
+
+                eligible_records_temp = pd.read_sql_query(eligible_records_qry, self.conn)
+                #eligible_records = pd.concat([eligible_records, eligible_records_temp], axis=0)
+
+                for date in all_dates:
+                    eligible_records_temp2 = eligible_records_temp[eligible_records_temp.Date >= date]
+                    selected_records_temp2 = selected_records_temp[selected_records_temp.Date >= date]
+                    if len(eligible_records_temp2.index) > len(selected_records_temp2.index):
+                        selected_records = pd.concat([selected_records, selected_records_temp2], axis=0)
+                        eligible_records = pd.concat([eligible_records, eligible_records_temp2], axis=0)
+                        break
+
+                #print(eligible_missed_records)
+
+        selected_records.to_csv('selected_records_2.csv', sep=',', index=False)
+        eligible_records.to_csv('eligible_records_2.csv', sep=',', index=False)
+
+        c.close()
+
+
+

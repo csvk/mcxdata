@@ -29,7 +29,10 @@ db = dbhandler.DataDB(DBPATH)
 #db.create_continuous_contracts()
 #db.manage_missed_records(symbols=['ALUMINIUM', 'CRUDEOIL'])
 #db.manage_missed_records()
-db.manage_selected_records()
+#db.manage_missed_records_2()
+#db.manage_selected_records()
+db.update_continuous_contract()
+
 
 #d = dates.dates('2018-04-06', '2018-04-10', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
 #print(len(d))
