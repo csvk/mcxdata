@@ -270,11 +270,6 @@ class DataDB:
             symbol, date, expiry_date = getattr(row, "Symbol"), getattr(row, "Date"), getattr(row, "ExpiryDate")
 
             if symbol != curr_symbol:
-                if not selected_records_isempty:
-                    selected_records = pd.concat([pd.read_csv('selected_records.csv'), selected_records], axis=0)
-                if len(selected_records.index) > 0:
-                    selected_records.to_csv('selected_records.csv', sep=',', index=False)
-                    selected_records_isempty = False
                 if not eligible_records_isempty:
                     eligible_records = pd.concat([pd.read_csv('eligible_records.csv'), eligible_records], axis=0)
                 if len(eligible_records.index) > 0:
@@ -311,15 +306,6 @@ class DataDB:
             else:
                 next_exp = next_exp[0]
 
-            """
-            selected_expiry_row_qry = '''SELECT COUNT(*), SUM(VolumeLots) FROM tblFutures
-                                          WHERE Symbol = "{}" 
-                                            AND Date >= "{}" 
-                                            AND ExpiryDate = "{}"'''.format(symbol, date, prev_exp)
-
-            c.execute(selected_expiry_row_qry)
-            result = c.fetchone()"""
-
             eligible_missed_records = select_missed_records[(missed_records.Symbol == symbol) &
                                                             (missed_records.ExpiryDate == next_exp) &
                                                             (missed_records.Date >= date)]
@@ -335,27 +321,96 @@ class DataDB:
                 print('symbol,{},start,{},end,{},expiry,{},count,{}'''.format(
                     symbol, start_date, end_date, next_exp, eligible_missed_records.shape[0]))
 
-                # temp to be removed
-
-                selected_expiry_row_qry_temp = '''SELECT * FROM tblFutures
-                                                   WHERE Symbol = "{}" 
-                                                 AND Date BETWEEN "{}" AND "{}"
-                                                 AND ExpiryDate = "{}"'''.format(symbol, start_date, end_date, prev_exp)
-
-                selected_records = pd.concat([selected_records,
-                                              pd.read_sql_query(selected_expiry_row_qry_temp, self.conn)], axis=0)
-
-                # end temp
-
             gc.collect()
 
         c.close()
 
-        if not selected_records_isempty:
-            selected_records = pd.concat([pd.read_csv('selected_records.csv'), selected_records], axis=0)
-        if len(selected_records.index) > 0:
-            selected_records.to_csv('selected_records.csv', sep=',', index=False)
         if not eligible_records_isempty:
             eligible_records = pd.concat([pd.read_csv('eligible_records.csv'), eligible_records], axis=0)
         if len(eligible_records.index) > 0:
             eligible_records.to_csv('eligible_records.csv', sep=',', index=False)
+
+    def manage_selected_records(self, debug=False):
+
+        symbols_considered = {}
+
+        prev_symbol,  prev_date, prev_expiry = "", "", ""
+
+        eligible_records = pd.read_csv('eligible_records.csv')
+
+        for row in eligible_records.itertuples(index=True, name='Pandas'):
+            symbol, date, expiry_date = getattr(row, "Symbol"), getattr(row, "Date"), getattr(row, "ExpiryDate")
+
+            if symbol != prev_symbol:
+                symbols_considered[symbol] = {expiry_date: {'begin': date}}
+                if prev_symbol != "":
+                    symbols_considered[prev_symbol][prev_expiry]['end'] = prev_date
+            else:
+                if expiry_date != prev_expiry:
+                    symbols_considered[symbol][expiry_date] = {'begin': date}
+                    symbols_considered[symbol][prev_expiry]['end'] = prev_date
+
+            prev_symbol, prev_date, prev_expiry = symbol, date, expiry_date
+
+        symbols_considered[symbol][prev_expiry]['end'] = prev_date
+
+        all_selected_records, all_eligible_records = pd.DataFrame(), pd.DataFrame()
+
+        for symbol in symbols_considered:
+            print("Selecting eligible records for {}".format(symbol))
+            for expiry in symbols_considered[symbol]:
+                prev_exp_last_selected_record_qry = '''SELECT tblFutures.Symbol, 
+                                                              tblFutures.Date, 
+                                                              tblFutures.ExpiryDate, 
+                                                              tblFutures.VolumeLots
+                                                         FROM tblFutures
+                                                        WHERE tblFutures.Symbol = "{}"
+                                                          AND tblFutures.Date < "{}"
+                                                          ORDER BY tblFutures.Date DESC'''.format(
+                    symbol, symbols_considered[symbol][expiry]['begin'])
+
+                prev_exp_records = pd.read_sql_query(prev_exp_last_selected_record_qry, self.conn)
+                if len(prev_exp_records.index) == 0:
+                    print(symbol, expiry, symbols_considered[symbol][expiry]['begin'],
+                          symbols_considered[symbol][expiry]['end'], "##################################")
+                    continue
+                prev_exp_last_selected_record = prev_exp_records[prev_exp_records.Date == prev_exp_records.iloc[0].Date]
+
+                selected_records_qry = '''SELECT *
+                                        FROM tblFutures
+                                       WHERE tblFutures.Symbol = "{}"
+                                         AND tblFutures.Date BETWEEN "{}" AND "{}"
+                                       ORDER BY tblFutures.Date ASC'''.format(
+                    symbol,
+                    prev_exp_last_selected_record.iloc[0]['Date'],
+                    symbols_considered[symbol][expiry]['end'])
+
+                eligible_records_qry = '''SELECT Symbol, Date, Open, High, Low, Close, VolumeLots, OpenInterestLots, ExpiryDate
+                                        FROM tblDump
+                                       WHERE Symbol = "{}"
+                                         AND InstrumentName = "{}"
+                                         AND Date BETWEEN "{}" AND "{}"
+                                         AND ExpiryDate = "{}"
+                                       ORDER BY Date ASC'''.format(
+                    symbol,
+                    self.instrument_type,
+                    prev_exp_last_selected_record.iloc[0]['Date'],
+                    symbols_considered[symbol][expiry]['end'],
+                    expiry)
+
+                selected_records_tblfutures = pd.read_sql_query(selected_records_qry, self.conn)
+                eligible_records_tbldump = pd.read_sql_query(eligible_records_qry, self.conn)
+
+                all_selected_records = pd.concat([all_selected_records, selected_records_tblfutures], axis=0)
+                all_eligible_records = pd.concat([all_eligible_records, eligible_records_tbldump], axis=0)
+
+                if debug:
+                    print(symbol, "selected", selected_records_tblfutures['ExpiryDate'][0], len(selected_records_tblfutures.index),
+                          selected_records_tblfutures['Date'].min(), selected_records_tblfutures['Date'].max(),
+                          selected_records_tblfutures['VolumeLots'].sum())
+                    print(symbol, "eligible", eligible_records_tbldump['ExpiryDate'][0], len(eligible_records_tbldump.index),
+                          eligible_records_tbldump['Date'].min(), eligible_records_tbldump['Date'].max(),
+                          eligible_records_tbldump['VolumeLots'].sum())
+
+        all_selected_records.to_csv('all_selected_records.csv', sep=',', index=False)
+        all_eligible_records.to_csv('all_eligible_records.csv', sep=',', index=False)
