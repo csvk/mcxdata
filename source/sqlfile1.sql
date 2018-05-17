@@ -43,9 +43,18 @@ select symbol, count(*) from tblFutures group by symbol
 select symbol, count(*) from (select distinct symbol, date from tblDump) group by symbol
 
 -- Find rows missing in tblFutures
-select tbldump.symbol, tbldump.date, tblDump.ExpiryDate
-from tblDump left outer join tblFutures 
-on tbldump.Symbol = tblFutures.Symbol
-and tbldump.Date = tblFutures.Date
-where tblFutures.date is null
+SELECT tblDump.Symbol, tblDump.Date, tblDump.ExpiryDate, tblDump.VolumeLots
+                   FROM tblDump LEFT OUTER JOIN tblFutures
+                     ON tblDump.Symbol = tblFutures.Symbol
+                    AND tblDump.Date = tblFutures.Date
+                  WHERE tblFutures.date is NULL
+                  ORDER BY tblDump.Symbol ASC, tblDump.ExpiryDate ASC, tblDump.Date ASC
+
+
+-- date duplicate sanity check
+SELECT *
+  FROM (SELECT Symbol, Date, Count(*) Date_Count
+          FROM tblFutures
+         GROUP BY Symbol, Date) tblData
+ WHERE Date_Count = 1
     
