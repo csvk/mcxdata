@@ -52,7 +52,7 @@ class DataDB:
 
         # variables
 
-        self.instrument_type = type    
+        self.instrument_type = type
 
         print('Opening Bhavcopy database {}...'.format(db))
         self.conn = sqlite3.connect(db)
@@ -97,7 +97,7 @@ class DataDB:
 
         last_trading_day = trading_day_list[len(trading_day_list) - 1]
         if date > last_trading_day: # If passed expiry date is beyond last available bar
-            weekdays_till_date = dates.dates(last_trading_day, date, 
+            weekdays_till_date = dates.dates(last_trading_day, date,
                                              ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
             return self.trading_day_idx[last_trading_day] + len(weekdays_till_date) - 1
         else:
@@ -475,20 +475,4 @@ class DataDB:
                 if row['ExpiryDate'] < prev_exp:
                     print(row['Symbol'], row['Date'], row['ExpiryDate'], prev_date, prev_exp)
                 prev_exp, prev_date = row['ExpiryDate'], row['Date']
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
