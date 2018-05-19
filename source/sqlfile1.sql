@@ -57,4 +57,6 @@ SELECT *
           FROM tblFutures
          GROUP BY Symbol, Date) tblData
  WHERE Date_Count = 1
+
+ select symbol, date, count(*) days from tblFutures group by symbol, date order by days DESC
     

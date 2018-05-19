@@ -176,7 +176,9 @@ class DataDB:
         """
         Create continuous contracts with rollover day on delta trading days from expiry
         delta = 0 means rollover happens on expiry day
-        :param symbols: [list of symbols], no need to pass anything if for all symbols
+        :param symbols:
+        [list of symbols], no need to pass anything if for all symbols
+        delta: delta days for rollover before expiry
         :return:
         """
 
@@ -220,61 +222,18 @@ class DataDB:
 
         self.insert_records(df_unique)
 
-    def update_continuous_contract(self, symbols=[]):
-
-        print('start update continuous contract')
-
-        selected_records = pd.read_csv(self.selected_records_file)
-        eligible_records = pd.read_csv(self.eligible_records_file)
-
-        c = self.conn.cursor()
-
-        # delete records
-        prev_symbol = ""
-        for idx, row in selected_records.iterrows():
-            if row['Symbol'] not in symbols and symbols != []:
-                continue
-            if row['Symbol'] != prev_symbol:
-                print('deleting', row['Symbol'])
-            delete_qry = '''DELETE FROM tblFutures 
-                             WHERE Symbol = "{}"
-                               AND Date = "{}"'''.format(row['Symbol'], row['Date'])
-            c.execute(delete_qry)
-            prev_symbol = row['Symbol']
-        self.conn.commit()
-
-        duplicate_ignored = pd.DataFrame()
-        for idx, row in eligible_records.iterrows():
-            if row['Symbol'] not in symbols and symbols != []:
-                continue
-
-            insert_row = (row['Symbol'], row['Date'], row['Open'], row['High'], row['Low'], row['Close'],
-                          row['VolumeLots'], row['OpenInterestLots'], row['ExpiryDate'])
-
-            check_qry = '''SELECT * FROM tblFutures WHERE Symbol = "{}" AND Date = "{}"'''.format(row['Symbol'],
-                                                                                              row['Date'])
-
-            duplicate_record = pd.read_sql_query(check_qry, self.conn)
-
-            if duplicate_record.empty:
-                c.execute('''INSERT INTO tblFutures VALUES (?,?,?,?,?,?,?,?,?)''', insert_row)
-            else:
-                duplicate_record['Flag'] = "Dup"
-                row['Flag'] = "Ign"
-                row_frame = row.to_frame().T
-
-                duplicate_ignored = pd.concat([duplicate_ignored, duplicate_record, row_frame], axis=0)
-
-        try:
-            os.remove(self.duplicate_ignored_file)
-        except OSError:
-            pass
-        duplicate_ignored.to_csv(self.duplicate_ignored_file, sep=',', index=False)
-
-        self.conn.commit()
-        c.close()
-
     def prev_and_next_dates(self, c, symbol, expiry_date, symbols_latest_date, symbols_latest_exp, start, end):
+        '''
+
+        :param c: DB connection
+        :param symbol: symbol
+        :param expiry_date: current expiry date
+        :param symbols_latest_date: last date already selected for symbol
+        :param symbols_latest_exp: expiry_date for last date already selected for symbol
+        :param start: date range start
+        :param end: date range end
+        :return: {prev and next dates and expiries before and after date range}
+        '''
 
         prev_date_qry = '''SELECT Date, ExpiryDate FROM tblFutures 
                                            WHERE Symbol = "{}" AND Date < "{}" ORDER BY Date DESC'''.format(symbol,
@@ -333,12 +292,11 @@ class DataDB:
 
         symbols_latest_date, symbols_latest_exp = dict(), dict()
 
-        curr_symbol = ""
         c = self.conn.cursor()
 
         selected_records, eligible_records = pd.DataFrame(), pd.DataFrame()
-        selected_records_isempty, eligible_records_isempty = True, True
 
+        # Loop through symbols
         for symbol in select_missed_records['Symbol'].unique():
             symbol_expiry_qry = '''SELECT ExpiryDate FROM tblExpiries WHERE Symbol = "{}" 
                                     ORDER BY ExpiryDate ASC'''.format(symbol)
@@ -349,6 +307,7 @@ class DataDB:
 
             symbol_missed_records = select_missed_records[select_missed_records.Symbol == symbol]
 
+            # Loop through expiry_dates for the symbol
             for expiry_date in symbol_missed_records['ExpiryDate'].unique():
                 symbol_missed_records_for_expiry = \
                     symbol_missed_records[symbol_missed_records.ExpiryDate == expiry_date]
@@ -357,6 +316,7 @@ class DataDB:
                                                                                       symbols_latest_date[symbol]))
                     continue
 
+                # Sort all dates selected
                 all_dates = symbol_missed_records_for_expiry['Date'].unique()
                 all_dates.sort()
 
@@ -378,6 +338,7 @@ class DataDB:
                 prev_date_plus_1, next_date_minus_1 = dates.relativedate(prev_date, days=1), \
                                                       dates.relativedate(next_date, days=-1)
 
+                # Select records for compare and deletion if needed
                 selected_records_qry = '''SELECT * FROM tblFutures
                                                    WHERE Symbol = "{}" 
                                                      AND Date BETWEEN "{}" AND "{}"'''.format(
@@ -385,6 +346,7 @@ class DataDB:
 
                 selected_records_temp = pd.read_sql_query(selected_records_qry, self.conn)
 
+                # Select eligible records
                 eligible_records_qry = '''SELECT Symbol, Date, Open, High, Low, Close, VolumeLots, OpenInterestLots, ExpiryDate 
                                             FROM tblDump
                                            WHERE Symbol = "{}" 
@@ -394,6 +356,7 @@ class DataDB:
 
                 eligible_records_temp = pd.read_sql_query(eligible_records_qry, self.conn)
 
+                # Loop through missing dates
                 for date in all_dates:
                     prev_next_dates2 = self.prev_and_next_dates(c, symbol, expiry_date,
                                                                symbols_latest_date[symbol], symbols_latest_exp[symbol],
@@ -402,6 +365,8 @@ class DataDB:
                     next_exp = prev_next_dates2['next_exp']
 
                     next_symbol_expiries = [d for d in symbol_expiries['ExpiryDate'].tolist() if d >= next_exp]
+
+                    # Find expiry after the next to make sure records from too fare away are not identified as eligible
                     if len(next_symbol_expiries) >= 2:
                         next_next_expiry = next_symbol_expiries[1]
                     else:
@@ -456,6 +421,60 @@ class DataDB:
         selected_records.to_csv(self.selected_records_file, sep=',', index=False)
         eligible_records.to_csv(self.eligible_records_file, sep=',', index=False)
 
+        c.close()
+
+    def update_continuous_contract(self, symbols=[]):
+
+        print('start update continuous contract')
+
+        selected_records = pd.read_csv(self.selected_records_file)
+        eligible_records = pd.read_csv(self.eligible_records_file)
+
+        c = self.conn.cursor()
+
+        # delete records
+        prev_symbol = ""
+        for idx, row in selected_records.iterrows():
+            if row['Symbol'] not in symbols and symbols != []:
+                continue
+            if row['Symbol'] != prev_symbol:
+                print('deleting', row['Symbol'])
+            delete_qry = '''DELETE FROM tblFutures 
+                             WHERE Symbol = "{}"
+                               AND Date = "{}"'''.format(row['Symbol'], row['Date'])
+            c.execute(delete_qry)
+            prev_symbol = row['Symbol']
+        self.conn.commit()
+
+        duplicate_ignored = pd.DataFrame()
+        for idx, row in eligible_records.iterrows():
+            if row['Symbol'] not in symbols and symbols != []:
+                continue
+
+            insert_row = (row['Symbol'], row['Date'], row['Open'], row['High'], row['Low'], row['Close'],
+                          row['VolumeLots'], row['OpenInterestLots'], row['ExpiryDate'])
+
+            check_qry = '''SELECT * FROM tblFutures WHERE Symbol = "{}" AND Date = "{}"'''.format(row['Symbol'],
+                                                                                              row['Date'])
+
+            duplicate_record = pd.read_sql_query(check_qry, self.conn)
+
+            if duplicate_record.empty:
+                c.execute('''INSERT INTO tblFutures VALUES (?,?,?,?,?,?,?,?,?)''', insert_row)
+            else:
+                duplicate_record['Flag'] = "Dup"
+                row['Flag'] = "Ign"
+                row_frame = row.to_frame().T
+
+                duplicate_ignored = pd.concat([duplicate_ignored, duplicate_record, row_frame], axis=0)
+
+        try:
+            os.remove(self.duplicate_ignored_file)
+        except OSError:
+            pass
+        duplicate_ignored.to_csv(self.duplicate_ignored_file, sep=',', index=False)
+
+        self.conn.commit()
         c.close()
 
     def expiry_sanity_check(self):
