@@ -3,7 +3,7 @@ Created on Mar 11, 2017
 @author: Souvik
 @Program Function: CSV handler
 
-
+Deprecated in favor of datadbhandler
 """
 
 import os
