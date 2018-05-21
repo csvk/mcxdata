@@ -6,20 +6,9 @@ SELECT Symbol, Date, Open, High, Low, Close, VolumeLots, OpenInterestLots, Expir
                     AND Symbol = "COTTON"
 
 
-CREATE TABLE "tblDump2" ( 
-  `Date` TEXT, `InstrumentName` TEXT, 
-  `Symbol` TEXT, `ExpiryDate` TEXT, 
-  `OptionType` TEXT, 
-  `StrikePrice` INTEGER, 
-  `Open` REAL, 
-  `High` REAL, 
-  `Low` REAL, 
-  `Close` REAL, 
-  `PreviousClose` REAL, 
-  `VolumeLots` INTEGER, 
-  `VolumeThousands` TEXT, 
-  `Value` REAL, 
-  `OpenInterestLots` INTEGER )
+CREATE TABLE "tblDump" ( `Date` TEXT, `InstrumentName` TEXT, `Symbol` TEXT, `ExpiryDate` TEXT, `OptionType` TEXT,
+`StrikePrice` INTEGER, `Open` REAL, `High` REAL, `Low` REAL, `Close` REAL, `PreviousClose` REAL, `VolumeLots` INTEGER,
+`VolumeThousands` TEXT, `Value` REAL, `OpenInterestLots` INTEGER )
 
   CREATE TABLE "tblExpiries" ( `Symbol` TEXT, `ExpiryDate` TEXT )
 
@@ -34,9 +23,18 @@ CREATE TABLE "tblDump2" (
     `OpenInterestLots` INTEGER, 
     `ExpiryDate` TEXT)
 
+CREATE TABLE "tblDumpStaging" ( `Date` TEXT, `InstrumentName` TEXT, `Symbol` TEXT, `ExpiryDate` TEXT,
+`OptionType` TEXT, `StrikePrice` INTEGER, `Open` REAL, `High` REAL, `Low` REAL, `Close` REAL, `PreviousClose` REAL,
+`VolumeLots` INTEGER, `VolumeThousands` TEXT, `Value` REAL, `OpenInterestLots` INTEGER )
+
+CREATE TABLE `tblMultipliers` ( `symbol` TEXT, `prev_expiry` TEXT, `next_expiry` TEXT, `rollover_date` TEXT,
+`multiplier_calc_type` TEXT, `multiplier_calc_date` TEXT, `multiplier` REAL, `resultant_multiplier` REAL )
+
 CREATE INDEX `idxFutures` ON `tblFutures` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC)
     
 CREATE INDEX `idxDump` ON `tblDump` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC, `InstrumentName` ASC )
+
+CREATE INDEX `idxDumpStaging` ON `tblDumpStaging` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC, `InstrumentName` ASC )
 
 select symbol, count(*) from tblFutures group by symbol
 

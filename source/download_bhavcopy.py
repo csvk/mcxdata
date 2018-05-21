@@ -26,7 +26,7 @@ os.chdir(location)
 log_lines = []
 
 #date_range = dates.dates('2017-02-17', '2017-02-20')
-# date_range = dates.dates('2017-12-01')
+#date_range = dates.dates('2018-04-07')
 date_range = dates.adhoc_dates
 
 options = webdriver.ChromeOptions()

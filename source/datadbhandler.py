@@ -20,15 +20,19 @@ import gc
 class DataDB:
     """ Historical Bhavcopy data"""
 
-    # variables
+    # constants
 
-    instrument_type = 'FUTCOM'
+    INSTRUMENT_NAME = 'FUTCOM'
+    SELECTED_RECORDS_FILE = 'selected_records.csv'
+    ELIGIBLE_RECORDS_FILE = 'eligible_records.csv'
+    DUPLICATE_RECORDS_FILE = 'duplicate_records.csv'
+    DUPLICATE_IGNORED_FILE = 'duplicate_ignored.csv'
+    APPENDED_RECORDS_FILE = 'appended_records.csv'
+    FORMATTED = 'formatted/'
+
+    # variables
     trading_day_idx = dict()
     trading_day_idx_rev = dict()
-    selected_records_file = 'selected_records.csv'
-    eligible_records_file = 'eligible_records.csv'
-    duplicate_records_file = 'duplicate_records.csv'
-    duplicate_ignored_file = 'duplicate_ignored.csv'
 
     def set_trading_day_idx(self):
         """
@@ -36,7 +40,7 @@ class DataDB:
         """
 
         qry = '''SELECT DISTINCT Date FROM tblDump 
-                  WHERE InstrumentName = "{}" ORDER BY Date'''.format(self.instrument_type)
+                  WHERE InstrumentName = "{}" ORDER BY Date'''.format(self.INSTRUMENT_NAME)
 
         c = self.conn.cursor()
         c.execute(qry)
@@ -52,7 +56,7 @@ class DataDB:
 
         # variables
 
-        self.instrument_type = type    
+        self.INSTRUMENT_NAME = type    
 
         print('Opening Bhavcopy database {}...'.format(db))
         self.conn = sqlite3.connect(db)
@@ -68,15 +72,15 @@ class DataDB:
     def dump_record_count(self):
 
         c = self.conn.cursor()
-        c.execute('''SELECT COUNT(*) FROM tblDump WHERE InstrumentName = "{}"'''.format(self.instrument_type))
+        c.execute('''SELECT COUNT(*) FROM tblDump WHERE InstrumentName = "{}"'''.format(self.INSTRUMENT_NAME))
         rows = c.fetchall()
         c.close()
 
         print("Total number of records in the data dump: {}".format(rows[0][0]))
 
-    def unique_symbols(self):
+    def unique_symbols(self, table='tblDump'):
 
-        qry = '''SELECT DISTINCT Symbol FROM tblDump WHERE InstrumentName = "{}"'''.format(self.instrument_type)
+        qry = '''SELECT DISTINCT Symbol FROM "{}" WHERE InstrumentName = "{}"'''.format(table, self.INSTRUMENT_NAME)
 
         c = self.conn.cursor()
         c.execute(qry)
@@ -122,8 +126,8 @@ class DataDB:
         truncate_query = '''DELETE FROM tblExpiries'''
 
         insert_query = '''INSERT INTO tblExpiries
-                       SELECT DISTINCT Symbol, ExpiryDate FROM tblDump
-                        WHERE InstrumentName = "{}"'''.format(self.instrument_type)
+                          SELECT DISTINCT Symbol, ExpiryDate FROM tblDump
+                           WHERE InstrumentName = "{}"'''.format(self.INSTRUMENT_NAME)
 
         c = self.conn.cursor()
         c.execute(truncate_query)
@@ -153,13 +157,14 @@ class DataDB:
 
         return [row[1] for row in rows]
 
-    def symbol_records(self, symbol):
+    def symbol_records(self, symbol, start='1900-01-01', end='2100-12-31'):
 
         qry = '''SELECT Symbol, Date, Open, High, Low, Close, VolumeLots, OpenInterestLots, ExpiryDate 
                    FROM tblDump
                   WHERE Symbol = "{}"
                     AND InstrumentName = "{}"
-                  ORDER BY Symbol ASC, Date ASC, ExpiryDate ASC'''.format(symbol, self.instrument_type)
+                    AND Date BETWEEN "{}" AND "{}"
+                  ORDER BY Symbol ASC, Date ASC, ExpiryDate ASC'''.format(symbol, self.INSTRUMENT_NAME, start, end)
 
         df = pd.read_sql_query(qry, self.conn)
 
@@ -195,12 +200,12 @@ class DataDB:
             df['TradingDay'] = [self.trading_day_idx[date] for date in df['Date']]
 
             next_trading_day_idx = 0
-            expiry_idx = 0
+            #expiry_idx = 0
 
             for expiry in expiries:
-                curr_expiry = expiries[expiry_idx]
-                curr_expiry_idx = self.trading_day(curr_expiry)
-                sel_records = df.loc[(df['ExpiryDate'] == curr_expiry) &
+                #curr_expiry = expiries[expiry_idx]
+                curr_expiry_idx = self.trading_day(expiry)
+                sel_records = df.loc[(df['ExpiryDate'] == expiry) &
                                      (df['TradingDay'] < curr_expiry_idx - delta ) &
                                      (df['TradingDay'] >= next_trading_day_idx)]
                 records = pd.concat([records, sel_records], axis=0)
@@ -214,11 +219,11 @@ class DataDB:
         df_duplicate = df_insert[df_insert.duplicated(['Symbol', 'Date'], keep=False)]
 
         try:
-            os.remove(self.duplicate_records_file)
+            os.remove(self.DUPLICATE_RECORDS_FILE)
         except OSError:
             pass
         if len(df_duplicate.index) > 0:
-            df_duplicate.to_csv(self.duplicate_records_file, sep=',', index=False)
+            df_duplicate.to_csv(self.DUPLICATE_RECORDS_FILE, sep=',', index=False)
 
         self.insert_records(df_unique)
 
@@ -285,8 +290,8 @@ class DataDB:
             else missed_records[missed_records.Symbol.isin(symbols)]
 
         try:
-            os.remove(self.selected_records_file)
-            os.remove(self.eligible_records_file)
+            os.remove(self.SELECTED_RECORDS_FILE)
+            os.remove(self.ELIGIBLE_RECORDS_FILE)
         except OSError:
             pass
 
@@ -418,8 +423,8 @@ class DataDB:
 
                         break
 
-        selected_records.to_csv(self.selected_records_file, sep=',', index=False)
-        eligible_records.to_csv(self.eligible_records_file, sep=',', index=False)
+        selected_records.to_csv(self.SELECTED_RECORDS_FILE, sep=',', index=False)
+        eligible_records.to_csv(self.ELIGIBLE_RECORDS_FILE, sep=',', index=False)
 
         c.close()
 
@@ -427,8 +432,8 @@ class DataDB:
 
         print('start update continuous contract')
 
-        selected_records = pd.read_csv(self.selected_records_file)
-        eligible_records = pd.read_csv(self.eligible_records_file)
+        selected_records = pd.read_csv(self.SELECTED_RECORDS_FILE)
+        eligible_records = pd.read_csv(self.ELIGIBLE_RECORDS_FILE)
 
         c = self.conn.cursor()
 
@@ -469,10 +474,10 @@ class DataDB:
                 duplicate_ignored = pd.concat([duplicate_ignored, duplicate_record, row_frame], axis=0)
 
         try:
-            os.remove(self.duplicate_ignored_file)
+            os.remove(self.DUPLICATE_IGNORED_FILE)
         except OSError:
             pass
-        duplicate_ignored.to_csv(self.duplicate_ignored_file, sep=',', index=False)
+        duplicate_ignored.to_csv(self.DUPLICATE_IGNORED_FILE, sep=',', index=False)
 
         self.conn.commit()
         c.close()
@@ -494,6 +499,192 @@ class DataDB:
                 if row['ExpiryDate'] < prev_exp:
                     print(row['Symbol'], row['Date'], row['ExpiryDate'], prev_date, prev_exp)
                 prev_exp, prev_date = row['ExpiryDate'], row['Date']
+
+    def load_table_from_csv(self, csv_path, table_name='tblDumpStaging'):
+
+        truncate_query = '''DELETE FROM {}'''.format(table_name)
+
+        c = self.conn.cursor()
+        c.execute(truncate_query)
+        self.conn.commit()
+
+        csv_files = [f for f in os.listdir(csv_path + self.FORMATTED) if f.endswith('.csv')]
+        csv_files.sort()
+
+        print('Initiating loading of {} files'.format(len(csv_files)))
+
+        read_count, write_count = 0, 0
+
+        for file in csv_files:
+            df_file = pd.read_csv(csv_path + self.FORMATTED + file)
+            read_count = read_count + len(df_file.index)
+
+            for idx, row in df_file.iterrows():
+                insert_row = (row['Date'], row['Instrument Name'], row['Symbol'], row['Expiry Date'],
+                              row['Option Type'], row['Strike Price'], row['Open'], row['High'], row['Low'],
+                              row['Close'], row['Previous Close'], row['Volume(Lots)'], row["Volume(In 000's)"],
+                              row['Value(Lacs)'], row['Open Interest(Lots)'])
+
+                c.execute('''INSERT INTO {} VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''.format(table_name),
+                          insert_row)
+
+            if read_count - write_count > 20000:
+                self.conn.commit()
+                write_count = read_count
+                print('inserted {} records till now'.format(write_count))
+
+        self.conn.commit()
+        write_count = read_count
+        c.close()
+
+        print('{} files processed, {} records inserted'.format(len(csv_files), write_count))
+
+    def process_staging_data(self):
+
+        c = self.conn.cursor()
+
+        date_start_qry = '''SELECT Date FROM tblDumpStaging ORDER BY Date ASC'''
+        date_end_qry = '''SELECT Date FROM tblDumpStaging ORDER BY Date DESC'''
+
+        c.execute(date_start_qry)
+        date_start_record = c.fetchone()
+        c.execute(date_end_qry)
+        date_end_record = c.fetchone()
+
+        if date_start_record is None:
+            print('staging table empty')
+            return None
+
+        start_date, end_date = date_start_record[0],date_end_record[0]
+
+        print('Processing staging records from {} to {}'.format(start_date, end_date))
+
+        qry = '''SELECT * FROM tblDumpStaging'''
+
+        records = pd.read_sql_query(qry, self.conn)
+
+        for idx, row in records.iterrows():
+            insert_row = (row['Date'], row['InstrumentName'], row['Symbol'], row['ExpiryDate'],
+                          row['OptionType'], row['StrikePrice'], row['Open'], row['High'], row['Low'],
+                          row['Close'], row['PreviousClose'], row['VolumeLots'], row["VolumeThousands"],
+                          row['Value'], row['OpenInterestLots'])
+
+            c.execute('''INSERT INTO tblDump VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', insert_row)
+
+        self.conn.commit()
+        c.close()
+        print('loaded {} records from staging to main dump'.format(len(records.index)))
+
+        self.write_expiries()
+        self.set_trading_day_idx()
+
+        return {'start': start_date, 'end': end_date}
+
+    def append_continuous_contracts(self, start_date, symbols=[], delta=0):
+        """
+        Append continuous contracts with rollover day on delta trading days from expiry
+        delta = 0 means rollover happens on expiry day
+        :param symbols:
+        start_date: start date in tblDumpStaging (start for which append is needed
+        [list of symbols]: no need to pass anything if for all symbols
+        delta: delta days for rollover before expiry
+        :return:
+        """
+
+        if len(symbols) == 0: # no symbol passed, default to all symbols
+            symbols = self.unique_symbols(table='tblDumpStaging')
+
+        c = self.conn.cursor()
+
+        records = pd.DataFrame()
+        for symbol in symbols:
+            print("Appending for {}".format(symbol))
+            expiries = self.expiry_history(symbol)
+
+            df = self.symbol_records(symbol, start=start_date)
+            print('expiries', min(expiries), max(expiries), 'records', df['Date'].min(), df['Date'].max())
+
+            df['TradingDay'] = [self.trading_day_idx[date] for date in df['Date']]
+
+            latest_expiry_qry = '''SELECT ExpiryDate FROM tblFutures 
+                                  WHERE Symbol = "{}" 
+                                  ORDER BY Date DESC'''.format(symbol)
+
+            c.execute(latest_expiry_qry)
+            latest_expiry_record = c.fetchone()
+
+            if latest_expiry_record is None:
+                print('{}: symbol not found in tblFutures'.format(symbol))
+                latest_expiry = '1900-01-01'
+            else:
+                latest_expiry = latest_expiry_record[0]
+                print(symbol, ': latest expiry', latest_expiry)
+
+            next_trading_day_idx = 0
+
+            eligible_expiries = [expiry for expiry in expiries if expiry >= latest_expiry]
+            eligible_expiries.sort()
+
+            for expiry in eligible_expiries:
+                print('processing expiry', expiry)
+                curr_expiry_idx = self.trading_day(expiry)
+                sel_records = df.loc[(df['ExpiryDate'] == expiry) &
+                                     (df['TradingDay'] < curr_expiry_idx - delta) &
+                                     (df['TradingDay'] >= next_trading_day_idx)]
+                records = pd.concat([records, sel_records], axis=0)
+
+                next_trading_day_idx = curr_expiry_idx - delta
+
+        df_insert = records.drop(['TradingDay'], axis=1)
+
+        df_unique = df_insert.drop_duplicates(['Symbol', 'Date'], keep=False)
+        df_duplicate = df_insert[df_insert.duplicated(['Symbol', 'Date'], keep=False)]
+
+        try:
+            os.remove(self.DUPLICATE_RECORDS_FILE)
+            os.remove(self.APPENDED_RECORDS_FILE)
+        except OSError:
+            pass
+
+        if len(df_duplicate.index) > 0:
+            df_duplicate.to_csv(self.DUPLICATE_RECORDS_FILE, sep=',', index=False)
+
+        if len(df_unique.index) > 0:
+            df_unique.to_csv(self.APPENDED_RECORDS_FILE, sep=',', index=False)
+
+        duplicate_ignored = pd.DataFrame()
+        for idx, row in df_unique.iterrows():
+            if row['Symbol'] not in symbols and symbols != []:
+                continue
+
+            insert_row = (row['Symbol'], row['Date'], row['Open'], row['High'], row['Low'], row['Close'],
+                          row['VolumeLots'], row['OpenInterestLots'], row['ExpiryDate'])
+
+            check_qry = '''SELECT * FROM tblFutures WHERE Symbol = "{}" AND Date = "{}"'''.format(row['Symbol'],
+                                                                                                  row['Date'])
+
+            duplicate_record = pd.read_sql_query(check_qry, self.conn)
+
+            if duplicate_record.empty:
+                c.execute('''INSERT INTO tblFutures VALUES (?,?,?,?,?,?,?,?,?)''', insert_row)
+                pass
+            else:
+                duplicate_record['Flag'] = "Dup"
+                row['Flag'] = "Ign"
+                row_frame = row.to_frame().T
+
+                duplicate_ignored = pd.concat([duplicate_ignored, duplicate_record, row_frame], axis=0)
+
+        try:
+            os.remove(self.DUPLICATE_IGNORED_FILE)
+        except OSError:
+            pass
+        duplicate_ignored.to_csv(self.DUPLICATE_IGNORED_FILE, sep=',', index=False)
+
+        self.conn.commit()
+        c.close()
+
+
 
 
 
