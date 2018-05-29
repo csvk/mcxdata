@@ -13,6 +13,7 @@ import pickle as pkl
 import csv
 import sqlite3
 from sqlalchemy import create_engine
+from collections import OrderedDict
 #from pympler.tracker import SummaryTracker, ObjectTracker
 import gc
 
@@ -170,12 +171,12 @@ class DataDB:
 
         return df
 
-    def insert_records(self, df):
+    def insert_records(self, df, table_name):
         """
         Insert passed records into tblFutures
         """
 
-        df.to_sql('tblFutures', self.engine, index=False, if_exists='append')
+        df.to_sql(table_name, self.engine, index=False, if_exists='append')
 
     def create_continuous_contracts(self, symbols=[], delta=0):
         """
@@ -225,7 +226,7 @@ class DataDB:
         if len(df_duplicate.index) > 0:
             df_duplicate.to_csv(self.DUPLICATE_RECORDS_FILE, sep=',', index=False)
 
-        self.insert_records(df_unique)
+        self.insert_records(df_unique, table_name='tblFutures')
 
     def prev_and_next_dates(self, c, symbol, expiry_date, symbols_latest_date, symbols_latest_exp, start, end):
         '''
@@ -279,11 +280,12 @@ class DataDB:
         # Identify symbol-date combinations which were available in tblDump but not included in tblFutures
 
         qry = '''SELECT tblDump.Symbol, tblDump.Date, tblDump.ExpiryDate, tblDump.VolumeLots
-                   FROM tblDump LEFT OUTER JOIN tblFutures
+                   FROM tblDump LEFT OUTER JOIN tblDump
                      ON tblDump.Symbol = tblFutures.Symbol
                     AND tblDump.Date = tblFutures.Date
-                  WHERE tblFutures.date is NULL
-                  ORDER BY tblDump.Symbol ASC, tblDump.ExpiryDate ASC, tblDump.Date ASC'''
+                  WHERE tblFutures.Date is NULL
+                    AND tblDump.InstrumentName = "{}"
+                  ORDER BY tblDump.Symbol ASC, tblDump.ExpiryDate ASC, tblDump.Date ASC'''.format(self.INSTRUMENT_NAME)
 
         missed_records = pd.read_sql_query(qry, self.conn)
         select_missed_records = missed_records if len(symbols) == 0 \
@@ -684,21 +686,110 @@ class DataDB:
         self.conn.commit()
         c.close()
 
+    def calculate_historical_multipliers(self, symbols=[]):
+        """
+        Calculate historical rollover multipliers
+        :param symbols: [symbol1, symbol2,...]
+        :return:
+        """
+        print('start calculate multipliers')
 
+        truncate_query = '''DELETE FROM tblMultipliers'''
 
+        c = self.conn.cursor()
+        c.execute(truncate_query)
+        self.conn.commit()
 
+        if len(symbols) == 0:  # no symbol passed, default to all symbols
+            symbols = self.unique_symbols()
 
+        #c = self.conn.cursor()
 
+        df = pd.DataFrame()
 
+        # Loop through symbols
+        for symbol in symbols:
+            print(symbol, 'calculating multipliers')
+            symbol_records_qry = '''SELECT * FROM tblFutures WHERE Symbol = "{}"
+                                    ORDER BY ExpiryDate ASC'''.format(symbol)
+            symbol_records = pd.read_sql_query(symbol_records_qry, self.conn)
 
+            prev_expiry = '1900-01-01'
+            resultant_multiplier = multiplier = 1
+            for idx, row in symbol_records.iterrows():
+                if prev_expiry == row['ExpiryDate']:
+                    continue
 
+                if prev_expiry == '1900-01-01':
+                    prev_expiry = row['ExpiryDate']
+                    continue
 
+                qry = '''SELECT tblFutures.Date, tblFutures.Open FuturesOpen, tblDump.Open DumpOpen
+                           FROM tblFutures JOIN tblDump
+                             ON tblFutures.Symbol = tblDump.Symbol
+                            AND tblFutures.Date = tblDump.Date
+                          WHERE tblFutures.Symbol = "{}"
+                            AND tblFutures.Date <= "{}"
+                            AND tblDump.InstrumentName = "{}"
+                            AND tblDump.ExpiryDate = "{}"
+                          ORDER BY tblFutures.Date DESC LIMIT 1'''.format(symbol, row['Date'], self.INSTRUMENT_NAME, prev_expiry)
 
+                same_day_qry = '''SELECT tblDump.Date, {} FuturesOpen, tblDump.Open DumpOpen
+                                    FROM tblDump
+                                   WHERE Symbol = "{}"
+                                     AND Date = "{}"
+                                     AND InstrumentName = "{}"
+                                     AND ExpiryDate = "{}"
+                                   LIMIT 1'''.format(row['Open'], symbol, row['Date'], self.INSTRUMENT_NAME, prev_expiry)
 
+                earlier_day_qry = '''SELECT F.Date, F.Close FuturesClose, D.Close DumpClose
+                           FROM tblDump F JOIN tblDump D
+                             ON F.Symbol = D.Symbol
+                            AND F.Date = D.Date
+                          WHERE F.Symbol = "{}"
+                            AND F.Date < "{}"
+                            AND F.InstrumentName = "{}"
+                            AND F.InstrumentName = "{}"
+                            AND F.ExpiryDate = "{}"
+                            AND D.ExpiryDate = "{}"
+                          ORDER BY F.Date DESC
+                          LIMIT 1'''.format(symbol, row['Date'], self.INSTRUMENT_NAME, self.INSTRUMENT_NAME,
+                                            row['ExpiryDate'], prev_expiry)
 
+                #multiplier_record = pd.read_sql_query(same_day_qry, self.conn)
 
+                #if len(multiplier_record.index) == 0:
+                multiplier_record = pd.read_sql_query(earlier_day_qry, self.conn)
 
+                if len(multiplier_record.index) > 0:
+                    multiplier_calc_date = multiplier_record.iloc[0]['Date']
+                    multiplier_calc_type = "Same Day" if multiplier_calc_date == row['Date'] else "Before Rollover"
+                    futures_close, dump_close = multiplier_record.iloc[0]['FuturesClose'], \
+                                              multiplier_record.iloc[0]['DumpClose']
+                    if futures_close == 0 or dump_close == 0:
+                        multiplier_calc_type = "Zero Close Default 1"
+                        multiplier = 1
+                        # resultant_multiplier remains same
+                    else:
+                        multiplier = dump_close / futures_close
+                        resultant_multiplier = resultant_multiplier * multiplier
+                else:
+                    multiplier_calc_date = row['Date']
+                    multiplier_calc_type = "Not Found Default 1"
+                    futures_close = dump_close = None
+                    multiplier = 1
+                    # resultant_multiplier remains same
 
+                days_between = self.trading_day(row['Date']) - self.trading_day(multiplier_calc_date)
 
+                insert_row = [('Symbol', symbol), ('PreviousExpiry', prev_expiry), ('NextExpiry', row['ExpiryDate']),
+                              ('RolloverDate', row['Date']), ('DumpClose', dump_close), ('FuturesClose', futures_close),
+                              ('MultiplierCalcType', multiplier_calc_type), ('MultiplierCalcDate', multiplier_calc_date),
+                              ('DaysBetweenCalcRollover', days_between), ('Multiplier', multiplier),
+                              ('ResultantMultiplier', resultant_multiplier)]
 
+                df = pd.concat([df, pd.DataFrame([OrderedDict(insert_row)])], axis=0)
 
+                prev_expiry = row['ExpiryDate']
+
+        self.insert_records(df, table_name='tblMultipliers')

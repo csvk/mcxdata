@@ -27,8 +27,12 @@ CREATE TABLE "tblDumpStaging" ( `Date` TEXT, `InstrumentName` TEXT, `Symbol` TEX
 `OptionType` TEXT, `StrikePrice` INTEGER, `Open` REAL, `High` REAL, `Low` REAL, `Close` REAL, `PreviousClose` REAL,
 `VolumeLots` INTEGER, `VolumeThousands` TEXT, `Value` REAL, `OpenInterestLots` INTEGER )
 
-CREATE TABLE `tblMultipliers` ( `symbol` TEXT, `prev_expiry` TEXT, `next_expiry` TEXT, `rollover_date` TEXT,
-`multiplier_calc_type` TEXT, `multiplier_calc_date` TEXT, `multiplier` REAL, `resultant_multiplier` REAL )
+CREATE TABLE "tblMultipliers" ( `Symbol` TEXT, `PreviousExpiry` TEXT, `NextExpiry` TEXT, `RolloverDate` TEXT,
+`MultiplierCalcType` TEXT, `MultiplierCalcDate` TEXT, `Multiplier` REAL, `ResultantMultiplier` REAL )
+
+CREATE TABLE "tblMultipliers" ( `Symbol` TEXT, `PreviousExpiry` TEXT, `NextExpiry` TEXT, `RolloverDate` TEXT,
+`DumpOpen` REAL, `FuturesOpen` REAL, `MultiplierCalcType` TEXT, `MultiplierCalcDate` TEXT, `Multiplier` REAL,
+`ResultantMultiplier` REAL, PRIMARY KEY(`Symbol`,`PreviousExpiry`,`NextExpiry`,`RolloverDate`) )
 
 CREATE INDEX `idxFutures` ON `tblFutures` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC)
     
