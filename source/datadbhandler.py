@@ -280,7 +280,7 @@ class DataDB:
         # Identify symbol-date combinations which were available in tblDump but not included in tblFutures
 
         qry = '''SELECT tblDump.Symbol, tblDump.Date, tblDump.ExpiryDate, tblDump.VolumeLots
-                   FROM tblDump LEFT OUTER JOIN tblDump
+                   FROM tblDump LEFT OUTER JOIN tblFutures
                      ON tblDump.Symbol = tblFutures.Symbol
                     AND tblDump.Date = tblFutures.Date
                   WHERE tblFutures.Date is NULL
@@ -686,36 +686,53 @@ class DataDB:
         self.conn.commit()
         c.close()
 
-    def calculate_historical_multipliers(self, symbols=[]):
+    def calculate_historical_multipliers(self, type='append', symbols=[]):
         """
         Calculate historical rollover multipliers
         :param symbols: [symbol1, symbol2,...]
+        type: 'append' if multipliers to be appended, 'refresh, if multipliers to be refreshed
         :return:
         """
         print('start calculate multipliers')
 
-        truncate_query = '''DELETE FROM tblMultipliers'''
-
-        c = self.conn.cursor()
-        c.execute(truncate_query)
-        self.conn.commit()
+        if type == 'refresh':
+            print('refreshing tblMultipliers')
+            df = pd.DataFrame()
+        else:
+            print('appending tblMultipliers')
+            qry = '''SELECT * FROM tblMultipliers'''
+            df = pd.read_sql_query(qry, self.conn)
 
         if len(symbols) == 0:  # no symbol passed, default to all symbols
             symbols = self.unique_symbols()
 
         #c = self.conn.cursor()
 
-        df = pd.DataFrame()
-
         # Loop through symbols
         for symbol in symbols:
             print(symbol, 'calculating multipliers')
-            symbol_records_qry = '''SELECT * FROM tblFutures WHERE Symbol = "{}"
-                                    ORDER BY ExpiryDate ASC'''.format(symbol)
+
+            if type == 'refresh':
+                prev_expiry = prev_date = '1900-01-01'
+                resultant_multiplier = 1
+            else: # type == 'append'
+                prev_expiry_qry = '''SELECT NextExpiry PrevExpiry, RolloverDate PrevDate, ResultantMultiplier
+                                       FROM tblMultipliers WHERE Symbol = "{}"
+                                      ORDER BY RolloverDate DESC LIMIT 1'''.format(symbol)
+                prev_expiry_record = pd.read_sql_query(prev_expiry_qry, self.conn)
+                if len(prev_expiry_record.index) > 0:
+                    prev_expiry = prev_expiry_record.iloc[0]['PrevExpiry']
+                    prev_date = prev_expiry_record.iloc[0]['PrevDate']
+                    resultant_multiplier = prev_expiry_record.iloc[0]['ResultantMultiplier']
+                else:
+                    prev_expiry = prev_date = '1900-01-01'
+                    resultant_multiplier = 1
+
+            # print(symbol, prev_date, prev_expiry)
+            symbol_records_qry = '''SELECT * FROM tblFutures WHERE Symbol = "{}" AND Date > "{}"
+                                    ORDER BY ExpiryDate ASC'''.format(symbol, prev_date)
             symbol_records = pd.read_sql_query(symbol_records_qry, self.conn)
 
-            prev_expiry = '1900-01-01'
-            resultant_multiplier = multiplier = 1
             for idx, row in symbol_records.iterrows():
                 if prev_expiry == row['ExpiryDate']:
                     continue
@@ -724,24 +741,6 @@ class DataDB:
                     prev_expiry = row['ExpiryDate']
                     continue
 
-                qry = '''SELECT tblFutures.Date, tblFutures.Open FuturesOpen, tblDump.Open DumpOpen
-                           FROM tblFutures JOIN tblDump
-                             ON tblFutures.Symbol = tblDump.Symbol
-                            AND tblFutures.Date = tblDump.Date
-                          WHERE tblFutures.Symbol = "{}"
-                            AND tblFutures.Date <= "{}"
-                            AND tblDump.InstrumentName = "{}"
-                            AND tblDump.ExpiryDate = "{}"
-                          ORDER BY tblFutures.Date DESC LIMIT 1'''.format(symbol, row['Date'], self.INSTRUMENT_NAME, prev_expiry)
-
-                same_day_qry = '''SELECT tblDump.Date, {} FuturesOpen, tblDump.Open DumpOpen
-                                    FROM tblDump
-                                   WHERE Symbol = "{}"
-                                     AND Date = "{}"
-                                     AND InstrumentName = "{}"
-                                     AND ExpiryDate = "{}"
-                                   LIMIT 1'''.format(row['Open'], symbol, row['Date'], self.INSTRUMENT_NAME, prev_expiry)
-
                 earlier_day_qry = '''SELECT F.Date, F.Close FuturesClose, D.Close DumpClose
                            FROM tblDump F JOIN tblDump D
                              ON F.Symbol = D.Symbol
@@ -749,7 +748,7 @@ class DataDB:
                           WHERE F.Symbol = "{}"
                             AND F.Date < "{}"
                             AND F.InstrumentName = "{}"
-                            AND F.InstrumentName = "{}"
+                            AND D.InstrumentName = "{}"
                             AND F.ExpiryDate = "{}"
                             AND D.ExpiryDate = "{}"
                           ORDER BY F.Date DESC
@@ -782,14 +781,100 @@ class DataDB:
 
                 days_between = self.trading_day(row['Date']) - self.trading_day(multiplier_calc_date)
 
-                insert_row = [('Symbol', symbol), ('PreviousExpiry', prev_expiry), ('NextExpiry', row['ExpiryDate']),
-                              ('RolloverDate', row['Date']), ('DumpClose', dump_close), ('FuturesClose', futures_close),
-                              ('MultiplierCalcType', multiplier_calc_type), ('MultiplierCalcDate', multiplier_calc_date),
-                              ('DaysBetweenCalcRollover', days_between), ('Multiplier', multiplier),
-                              ('ResultantMultiplier', resultant_multiplier)]
+                insert_row = [('Symbol', symbol), ('RolloverDate', row['Date']), ('PreviousExpiry', prev_expiry),
+                              ('NextExpiry', row['ExpiryDate']), ('DumpClose', dump_close),
+                              ('FuturesClose', futures_close), ('MultiplierCalcType', multiplier_calc_type),
+                              ('MultiplierCalcDate', multiplier_calc_date), ('DaysBetweenCalcRollover', days_between),
+                              ('Multiplier', multiplier), ('ResultantMultiplier', resultant_multiplier)]
 
                 df = pd.concat([df, pd.DataFrame([OrderedDict(insert_row)])], axis=0)
 
                 prev_expiry = row['ExpiryDate']
 
+        print(df[df.duplicated(['Symbol', 'RolloverDate'], keep=False)])
+        df.to_csv('multipliers.csv', sep=',', index=False)
+
+        truncate_query = '''DELETE FROM tblMultipliers'''
+
+        c = self.conn.cursor()
+        c.execute(truncate_query)
+        self.conn.commit()
+
         self.insert_records(df, table_name='tblMultipliers')
+
+    def create_adjusted_contract(self, symbols=[]):
+
+        print('start create adjusted contract')
+
+        if len(symbols) == 0:  # no symbol passed, default to all symbols
+            symbols = self.unique_symbols()
+
+        df = pd.DataFrame()
+
+        for symbol in symbols:
+            print('creating adjusted contract for', symbol)
+
+            # Find records which are available in tblFutures but not in tblContract
+            qry = '''SELECT F.* 
+                       FROM tblFutures F LEFT OUTER JOIN tblContract C
+                         ON F.Symbol = C.Symbol
+                        AND F.Date = C.Date
+                      WHERE F.Symbol = "{}"
+                        AND C.Date is NULL
+                      ORDER BY F.Date ASC'''.format(symbol)
+
+            symbol_records = pd.read_sql_query(qry, self.conn)
+
+            multiplier_qry = '''SELECT * 
+                                  FROM tblMultipliers
+                                 WHERE Symbol = "{}"'''.format(symbol)
+            multiplier_records = pd.read_sql_query(multiplier_qry, self.conn)
+
+            prev_expiry = '1900-01-01'
+            m_idx = 0
+            multiplier = 1
+            adjusted_open, adjusted_high, adjusted_low, adjusted_close = [], [], [], []
+            count = 1
+            for idx, row in symbol_records.iterrows():
+                #print('count', count)
+                #print(multiplier_records.iloc[m_idx])
+                #print(len(multiplier_records), m_idx)
+                if len(multiplier_records.index) == 0:
+                    multiplier = 1
+                elif row['Date'] >= multiplier_records.iloc[m_idx]['RolloverDate']:
+                    multiplier = multiplier_records.iloc[m_idx]['ResultantMultiplier']
+                    if prev_expiry != multiplier_records.iloc[m_idx]['PreviousExpiry'] \
+                            and m_idx + 1 < len(multiplier_records):
+                        print(symbol, row['Date'], prev_expiry, multiplier_records.iloc[m_idx]['PreviousExpiry'],
+                              'expiry date mismatch')
+                    if m_idx + 1 < len(multiplier_records):
+                        m_idx = m_idx + 1
+                #if m_idx > 2:
+                #    continue
+
+                #print(adjusted_open)
+                adjusted_open.append(round(row['Open'] * multiplier, 2))
+                #print('open', len(adjusted_open), row['Open'], row['Open'] * multiplier, adjusted_open)
+                adjusted_high.append(round(row['High'] * multiplier, 2))
+                adjusted_low.append(round(row['Low'] * multiplier, 2))
+                adjusted_close.append(round(row['Close'] * multiplier, 2))
+
+                prev_expiry = row['ExpiryDate']
+                count = count + 1
+
+            #print(len(symbol_records))
+            #print(len(adjusted_open))
+
+            symbol_records['AdjustedOpen'] = adjusted_open
+            symbol_records['AdjustedHigh'] = adjusted_high
+            symbol_records['AdjustedLow'] = adjusted_low
+            symbol_records['AdjustedClose'] = adjusted_close
+
+            #print(symbol_records)
+            df = pd.concat([df, symbol_records], axis=0)
+
+        # print(df[df.duplicated(['Symbol', 'Date'], keep=False)])
+        df.to_csv('contract.csv', sep=',', index=False)
+
+        self.insert_records(df, table_name='tblContract')
+

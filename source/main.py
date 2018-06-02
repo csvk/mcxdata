@@ -38,7 +38,9 @@ db = dbhandler.DataDB(DBPATH)
 #db.manage_selected_records()
 #db.update_continuous_contract()
 #db.expiry_sanity_check()
-db.calculate_historical_multipliers()
+#db.calculate_historical_multipliers()
+
+db.create_adjusted_contract()
 
 
 #tracker.print_diff()
