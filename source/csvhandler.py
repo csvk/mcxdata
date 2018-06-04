@@ -64,7 +64,10 @@ def format_csv_files(csv_path):
             date = file[0:10]  # Extract date from filename
             df = pd.read_csv(csv_path + RENAMED + file)
             df['Expiry Date'] = df['Expiry Date'].apply(dates.ddMMMyyyy_to_yyyy_mm_dd)  # Update Expiry Date Format
-            df['Date'] = df['Date'].apply(dates.dd_MMM_yyyy_to_yyyy_mm_dd) # Update Date Format
+            if date <= '2017-03-03':
+                df['Date'] = df['Date'].apply(dates.mm_dd_yyyy_to_yyyy_mm_dd)  # Update Date Format
+            else:
+                df['Date'] = df['Date'].apply(dates.dd_MMM_yyyy_to_yyyy_mm_dd) # Update Date Format
             df['Symbol'] = df['Symbol'].apply(str.strip)
 
             df.to_csv(csv_path + FORMATTED + file, sep=',', index=False)

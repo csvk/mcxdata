@@ -201,7 +201,7 @@ class DataDB:
             df['TradingDay'] = [self.trading_day_idx[date] for date in df['Date']]
 
             next_trading_day_idx = 0
-            #expiry_idx = 0
+            expiry_idx = 0
 
             for expiry in expiries:
                 #curr_expiry = expiries[expiry_idx]
@@ -522,11 +522,16 @@ class DataDB:
             read_count = read_count + len(df_file.index)
 
             for idx, row in df_file.iterrows():
-                insert_row = (row['Date'], row['Instrument Name'], row['Symbol'], row['Expiry Date'],
-                              row['Option Type'], row['Strike Price'], row['Open'], row['High'], row['Low'],
-                              row['Close'], row['Previous Close'], row['Volume(Lots)'], row["Volume(In 000's)"],
-                              row['Value(Lacs)'], row['Open Interest(Lots)'])
-
+                if row['Date'] <= '2017-05-12':
+                    insert_row = (row['Date'], 'FUTCOM', row['Symbol'], row['Expiry Date'],
+                                  '-', 0, row['Open'], row['High'], row['Low'],
+                                  row['Close'], row['Previous Close'], row['Volume'], row["Volume(In 000's)"],
+                                  row['Value'], row['Open Interest'])
+                else:
+                    insert_row = (row['Date'], row['Instrument Name'], row['Symbol'], row['Expiry Date'],
+                                  row['Option Type'], row['Strike Price'], row['Open'], row['High'], row['Low'],
+                                  row['Close'], row['Previous Close'], row['Volume(Lots)'], row["Volume(In 000's)"],
+                                  row['Value(Lacs)'], row['Open Interest(Lots)'])
                 c.execute('''INSERT INTO {} VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''.format(table_name),
                           insert_row)
 
