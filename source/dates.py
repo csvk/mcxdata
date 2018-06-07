@@ -83,6 +83,11 @@ def setdate(date, year=0, month=0, day=0):
 def datediff(date1, date2):
     return (datetime.strptime(date1, '%Y-%m-%d') - datetime.strptime(date2, '%Y-%m-%d')).days
 
+# Below functions take input as YYYY-MM-DD as input date format
+
+def yyyy_mm_dd_to_yyyymmdd(date):
+    return '{}{}{}'.format(date[0:4], date[5:7], date[8:10])
+
 # Below functions take input as MM-DD-YYYY as input date format
 
 def mm_dd_yyyy_to_yyyy_mm_dd(date, sep='-'):

@@ -10,7 +10,7 @@ import selenium
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
 import time, os
-import dates
+import dates, utils
 import traceback, logging
 
 
@@ -22,11 +22,14 @@ url = 'https://www.mcxindia.com/market-data/bhavcopy'
 chromedriver = 'C:/Program Files (x86)/chromedriver_win32/chromedriver.exe'
 logfile = 'log.txt'
 
+utils.rmdir(location)
+utils.mkdir(location)
 os.chdir(location)
+
 log_lines = []
 
 #date_range = dates.dates('2017-02-17', '2017-02-20')
-date_range = dates.dates('2018-05-19')
+date_range = dates.dates('2018-06-06')
 #date_range = dates.adhoc_dates
 
 options = webdriver.ChromeOptions()

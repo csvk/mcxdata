@@ -29,6 +29,8 @@ class DataDB:
     DUPLICATE_RECORDS_FILE = 'duplicate_records.csv'
     DUPLICATE_IGNORED_FILE = 'duplicate_ignored.csv'
     APPENDED_RECORDS_FILE = 'appended_records.csv'
+    AMIBROKER_FILE = 'ami_data.csv'
+    AMIBROKER_ADJUSTED_FILE = 'ami_data_adjusted.csv'
     FORMATTED = 'formatted/'
 
     # variables
@@ -434,8 +436,12 @@ class DataDB:
 
         print('start update continuous contract')
 
-        selected_records = pd.read_csv(self.SELECTED_RECORDS_FILE)
-        eligible_records = pd.read_csv(self.ELIGIBLE_RECORDS_FILE)
+        try:
+            selected_records = pd.read_csv(self.SELECTED_RECORDS_FILE)
+            eligible_records = pd.read_csv(self.ELIGIBLE_RECORDS_FILE)
+        except pd.errors.EmptyDataError:
+            print('Empty file, skipping update')
+            return 0
 
         c = self.conn.cursor()
 
@@ -796,7 +802,7 @@ class DataDB:
 
                 prev_expiry = row['ExpiryDate']
 
-        print(df[df.duplicated(['Symbol', 'RolloverDate'], keep=False)])
+        #print(df[df.duplicated(['Symbol', 'RolloverDate'], keep=False)])
         df.to_csv('multipliers.csv', sep=',', index=False)
 
         truncate_query = '''DELETE FROM tblMultipliers'''
@@ -832,20 +838,30 @@ class DataDB:
 
             multiplier_qry = '''SELECT * 
                                   FROM tblMultipliers
-                                 WHERE Symbol = "{}"'''.format(symbol)
+                                 WHERE Symbol = "{}"
+                                 ORDER BY RolloverDate ASC'''.format(symbol)
             multiplier_records = pd.read_sql_query(multiplier_qry, self.conn)
 
             prev_expiry = '1900-01-01'
             m_idx = 0
             multiplier = 1
-            adjusted_open, adjusted_high, adjusted_low, adjusted_close = [], [], [], []
+            adjusted_open, adjusted_high, adjusted_low, adjusted_close, multipliers = [], [], [], [], []
             count = 1
             for idx, row in symbol_records.iterrows():
                 #print('count', count)
                 #print(multiplier_records.iloc[m_idx])
                 #print(len(multiplier_records), m_idx)
+                #print(multiplier_records)
                 if len(multiplier_records.index) == 0:
                     multiplier = 1
+                elif prev_expiry == '1900-01-01':
+                    selected_multiplier_record = multiplier_records[multiplier_records.RolloverDate >= row['Date']]
+                    if len(selected_multiplier_record.index) == 0:
+                        multiplier = multiplier_records.iloc[-1]['ResultantMultiplier'] # Last record
+                        m_idx = multiplier_records.axes[0][-1]  # Axis of last record
+                    else:
+                        multiplier = selected_multiplier_record.iloc[0]['ResultantMultiplier'] # First selected record
+                        m_idx = selected_multiplier_record.axes[0][0]  # Axis of first record
                 elif row['Date'] >= multiplier_records.iloc[m_idx]['RolloverDate']:
                     multiplier = multiplier_records.iloc[m_idx]['ResultantMultiplier']
                     if prev_expiry != multiplier_records.iloc[m_idx]['PreviousExpiry'] \
@@ -863,6 +879,7 @@ class DataDB:
                 adjusted_high.append(round(row['High'] * multiplier, 2))
                 adjusted_low.append(round(row['Low'] * multiplier, 2))
                 adjusted_close.append(round(row['Close'] * multiplier, 2))
+                multipliers.append(multiplier)
 
                 prev_expiry = row['ExpiryDate']
                 count = count + 1
@@ -874,6 +891,7 @@ class DataDB:
             symbol_records['AdjustedHigh'] = adjusted_high
             symbol_records['AdjustedLow'] = adjusted_low
             symbol_records['AdjustedClose'] = adjusted_close
+            symbol_records['Multiplier'] = multipliers
 
             #print(symbol_records)
             df = pd.concat([df, symbol_records], axis=0)
@@ -882,4 +900,34 @@ class DataDB:
         df.to_csv('contract.csv', sep=',', index=False)
 
         self.insert_records(df, table_name='tblContract')
+
+    def create_amibroker_import_files(self, path, start_date='1900-01-01'):
+
+        qry = '''SELECT * FROM tblContract WHERE Date >= "{}"'''.format(start_date)
+
+        all_fields = pd.read_sql_query(qry, self.conn)
+        print(all_fields)
+
+        last_date = all_fields.iloc[-1]['Date']
+
+        all_fields['ExpiryDate'] = all_fields['ExpiryDate'].apply(dates.yyyy_mm_dd_to_yyyymmdd)  # Update Expiry Date Format
+        unadjusted = all_fields[['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'VolumeLots', 'OpenInterestLots',
+                        'ExpiryDate']]
+        unadjusted.to_csv(path + last_date + '.csv', sep=',', index=False)
+
+        all_fields['Symbol'] = all_fields['Symbol'].apply(lambda s: s + '-A')
+        adjusted = all_fields[['Symbol', 'Date', 'AdjustedOpen', 'AdjustedHigh', 'AdjustedLow', 'AdjustedClose']]
+        adjusted.to_csv(path + last_date + '.A.csv', sep=',', index=False)
+
+
+
+
+
+
+
+
+
+
+
+
 

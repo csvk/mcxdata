@@ -30,6 +30,8 @@ def copy_files(src_path, dest_path, files):
 
     count = 0
     for file in files:
+        if os.path.exists(dest_path + file):
+            os.unlink(dest_path + file)
         shutil.copyfile(src_path + file, dest_path + file)
         count += 1
 

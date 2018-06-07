@@ -25,7 +25,7 @@ CREATE TABLE "tblMultipliers" ( `Symbol` TEXT, `RolloverDate` TEXT, `PreviousExp
 
 CREATE TABLE "tblContract" ( `Symbol` TEXT, `Date` TEXT, `Open` REAL, `High` REAL, `Low` REAL, `Close` REAL,
 `VolumeLots` INTEGER, `OpenInterestLots` INTEGER, `ExpiryDate` TEXT, `AdjustedOpen` REAL, `AdjustedHigh` REAL,
-`AdjustedLow` REAL, `AdjustedClose` REAL, PRIMARY KEY(`Symbol`,`Date`) )
+`AdjustedLow` REAL, `AdjustedClose` REAL, `Multiplier` REAL, PRIMARY KEY(`Symbol`,`Date`) )
 
 CREATE INDEX `idxDump` ON `tblDump` ( `Symbol` ASC, `Date` ASC, `ExpiryDate` ASC, `InstrumentName` ASC )
 
