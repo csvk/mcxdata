@@ -92,7 +92,7 @@ def download_bhavcopy(csvpath, start_date):
 
     print('Download complete')
 
-    time.sleep(20)
+    time.sleep(3)
 
     browser.quit()
 
@@ -139,6 +139,10 @@ def format_csv_files(path, csv_files_path):
 
     csv_files = [f for f in os.listdir(csv_path + RENAMED) if f.endswith('.csv')]
     csv_files.sort()
+
+    if len(csv_files) == 0:
+        print('No files to format, exiting')
+        return None
 
     print('Initiating formatting of {} files'.format(len(csv_files)))
     print('Files range: {} - {}'.format(csv_files[0][0:10], csv_files[-1][0:10]))

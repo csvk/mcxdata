@@ -37,6 +37,6 @@ db.expiry_sanity_check()  # 9
 db.calculate_historical_multipliers()  # 10
 db.create_adjusted_contract()  # 11
 
-db.create_amibroker_import_files() #12
+db.create_amibroker_import_files(AMIBROKERPATH, start_date) #12
 
 tracker.print_diff()

@@ -19,10 +19,13 @@ tracker = SummaryTracker()
 path = PATH
 os.chdir(path)
 
-ch.download_bhavcopy(path + CSVDELTAPATH, '2018-06-06')
+ch.download_bhavcopy(path + CSVDELTAPATH, '2018-06-08')
 
 ch.ren_csv_files(path, CSVDELTAPATH, RAWBKPPATH)    # 1 : CSVPATH or CSVDELTAPATH
 start_date = ch.format_csv_files(path, CSVDELTAPATH)  # 2 : CSVPATH or CSVDELTAPATH
+
+if start_date is None:
+    exit()
 
 db = dbhandler.DataDB(DBPATH)
 
