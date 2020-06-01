@@ -15,7 +15,7 @@ import traceback, logging
 
 
 
-location = 'D:/Trading/mcxdata/delta' # Laptop
+location = 'D:\Trading\mcxdata\delta' # Laptop
 # location = 'C:/Users/SVK/OneDrive/Python/mcxdata/data' # Desktop
 
 url = 'https://www.mcxindia.com/market-data/bhavcopy'
@@ -28,8 +28,8 @@ os.chdir(location)
 
 log_lines = []
 
-#date_range = dates.dates('2017-02-17', '2017-02-20')
-date_range = dates.dates('2018-06-06')
+date_range = dates.dates('2018-06-13', '2020-05-31')
+#date_range = dates.dates('2018-06-06')
 #date_range = dates.adhoc_dates
 
 options = webdriver.ChromeOptions()
@@ -38,7 +38,7 @@ prefs = {"download.default_directory": location}
 options.add_experimental_option("prefs", prefs)
 #options.add_argument(location)
 
-browser = webdriver.Chrome(chromedriver, chrome_options=options)
+browser = webdriver.Chrome(chromedriver, options=options)
 browser.get(url)
 
 select_year_xpath = "//div[@class='datepick-month-header']/select[@title='Change the year']"
